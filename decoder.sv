@@ -17,7 +17,7 @@ module decoder(
     output logic [4:0] rdId,
 
     output logic [2:0] funct3,
-    output logic [6:0] funct7,
+    output logic [6:0] funct7
 );
 
     //Assign special case instructions by 7 LSB
