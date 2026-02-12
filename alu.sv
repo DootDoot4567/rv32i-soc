@@ -3,6 +3,8 @@ module alu(
     input logic [31:0] rs2,
     input logic [6:0] isALUreg,
     
+    input logic [31:0] instr,
+
     input logic [2:0] funct3,
     input logic [6:0] funct7,
 
@@ -19,7 +21,7 @@ module alu(
     always_comb 
         begin
             case(func3)
-                3'b000: (func7[5] & func5[5]) ? (aluIn1 - aluIn2) : (aluIn1 + aluIn1);
+                3'b000: (func7[5] & instr[5]) ? (aluIn1 - aluIn2) : (aluIn1 + aluIn1);
                 3'b001: aluIn1 << shiftAmount;
                 3'b010: aluOut = ($signed(aluIn1) < $signed(aluIn2));
 	            3'b011: aluOut = (aluIn1 < aluIn2);
