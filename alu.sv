@@ -6,11 +6,13 @@ module alu(
     output logic [31:0] aluOut,
 );
 
+    //Declare and initialize both inputs for the ALU
     logic [31:0] aluIn1 = rs1;
     logic [31:0] aluIn2 = isALUreg ? rs2 : Iimm;
 
     logic [4:0] shiftAmount = isALUreg ? rs2[4:0] :  instr[24:20];
 
+    //Define combinatorial operatations in ALU
     always_comb 
         begin
             case
@@ -24,9 +26,5 @@ module alu(
 	            3'b111: aluOut = (aluIn1 & aluIn2);
             endcase
         end
-
-    //Write back
-    assign writeBackData = aluOut;
-    assign writeBackEn = (state == EXECUTE && (isALUreg || isALUimm));
 
 endmodule
