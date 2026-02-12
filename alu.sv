@@ -18,7 +18,7 @@ module alu(
     //Define combinatorial operatations in ALU
     always_comb 
         begin
-            case
+            case(func3)
                 3'b000: (func7[5] & func5[5]) ? (aluIn1 - aluIn2) : (aluIn1 + aluIn1);
                 3'b001: aluIn1 << shiftAmount;
                 3'b010: aluOut = ($signed(aluIn1) < $signed(aluIn2));
