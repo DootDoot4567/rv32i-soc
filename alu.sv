@@ -20,13 +20,13 @@ module alu(
     //Define combinatorial operatations in ALU
     always_comb 
         begin
-            case(func3)
-                3'b000: aluOut = (func7[5] & instr[5]) ? (aluIn1 - aluIn2) : (aluIn1 + aluIn1);
+            case(funct3)
+                3'b000: aluOut = (funct7[5] & instr[5]) ? (aluIn1 - aluIn2) : (aluIn1 + aluIn1);
                 3'b001: aluOut = aluIn1 << shiftAmount;
                 3'b010: aluOut = ($signed(aluIn1) < $signed(aluIn2));
 	            3'b011: aluOut = (aluIn1 < aluIn2);
 	            3'b100: aluOut = (aluIn1 ^ aluIn2);
-	            3'b101: aluOut = funct7[5]? ($signed(aluIn1) >>> shamt) : (aluIn1 >> shamt);
+	            3'b101: aluOut = funct7[5]? ($signed(aluIn1) >>> shiftAmount) : (aluIn1 >> shiftAmount);
 	            3'b110: aluOut = (aluIn1 | aluIn2);
 	            3'b111: aluOut = (aluIn1 & aluIn2);
             endcase
