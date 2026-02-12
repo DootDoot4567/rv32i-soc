@@ -19,6 +19,8 @@ module decoder(
     output logic [2:0] funct3,
     output logic [6:0] funct7,
 );
+
+    //Assign special case instructions by 7 LSB
     assign isALUreg = (instr[6:0] == 7'b0110011);
     assign isALUimm = (instr[6:0] == 7'b0010011);
     assign isBranch = (instr[6:0] == 7'b1100011);
@@ -30,12 +32,19 @@ module decoder(
     assign isStore  = (instr[6:0] == 7'b0100011);
     assign isSYSTEM = (instr[6:0] == 7'b1110011);
 
+    //Assign bits registers and returning address
     assign rs1Id = instr[19:15];
     assign rs2Id = instr[24:20];
     assign rdId  = instr[11:7];
 
+    //Assign for additional opcode commands
     assign funct3 = instr[14:12];
     assign funct7 = instr[31:25];
+
+    //Assign the immediate values for each instruction type
+    //Modeled after the definitiion given by:
+    //  Computer Organization and Design:
+    //  The Hardware/Software Interface: RISC-V Edition
 
     assign Uimm = { instr[31], instr[30:12], 12'b0 };
     assign Iimm = {{21{instr[31]}}, instr[30:20]};
