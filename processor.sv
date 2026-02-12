@@ -4,8 +4,7 @@ module processor #(
     input logic clock,
     input logic reset
 );
-    logic [4:0] pc = 0;
-    logic [6:0] counter;
+    logic [6:0] pc = 0;
 
     logic [31:0] data_out;
     logic [31:0] instr;
@@ -45,7 +44,7 @@ module processor #(
         .write_enable(1'b0),
         .read_enable(read_enable),
         .addr_write(7'b0000000),
-        .addr_read(counter),
+        .addr_read(pc),
         .data_in(0),
         .data_out
     );
@@ -79,14 +78,14 @@ module processor #(
             if (reset)
                 begin
                     read_enable <= 1;
-                    counter <= 0;
+                    pc <= 0;
                 end
             else 
                 begin
-                    counter <= counter + 1;
+                    pc <= pc + 1;
 
-                    if (counter == 73)
-                        counter <= 0;
+                    if (pc == 73)
+                        pc <= 0;
                 end
         end 
 
