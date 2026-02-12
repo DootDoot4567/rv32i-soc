@@ -2,8 +2,11 @@ module alu(
     input logic [31:0] rs1,
     input logic [31:0] rs2,
     input logic [6:0] isALUreg,
+    
+    input logic [2:0] funct3,
+    input logic [6:0] funct7,
 
-    output logic [31:0] aluOut,
+    output logic [31:0] aluOut
 );
 
     //Declare and initialize both inputs for the ALU
