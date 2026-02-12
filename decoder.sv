@@ -19,6 +19,12 @@ module decoder(
     output logic [2:0] funct3,
     output logic [6:0] funct7
 );
+    //Declare type immediates
+    logic [31:0] Uimm;
+    logic [31:0] Iimm;
+    logic [31:0] Simm;
+    logic [31:0] Bimm;
+    logic [31:0] Jimm;
 
     //Assign special case instructions by 7 LSB
     assign isALUreg = (instr[6:0] == 7'b0110011);
