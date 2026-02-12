@@ -19,8 +19,6 @@ module decoder(
     output logic [2:0] funct3,
     output logic [6:0] funct7,
 );
-    logic [31:0] instr;
-
     assign isALUreg = (instr[6:0] == 7'b0110011);
     assign isALUimm = (instr[6:0] == 7'b0010011);
     assign isBranch = (instr[6:0] == 7'b1100011);
@@ -32,7 +30,7 @@ module decoder(
     assign isStore  = (instr[6:0] == 7'b0100011);
     assign isSYSTEM = (instr[6:0] == 7'b1110011);
 
-    assign rs1Id  instr[19:15];
+    assign rs1Id = instr[19:15];
     assign rs2Id = instr[24:20];
     assign rdId  = instr[11:7];
 
