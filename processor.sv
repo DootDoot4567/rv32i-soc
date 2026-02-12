@@ -8,7 +8,7 @@ module processor #(
     logic [6:0] counter;
 
     logic [31:0] data_out;
-    logic [31:0] instr = data_out;
+    logic [31:0] instr;
     logic read_enable = 0;
 
     logic isALUreg;
@@ -89,6 +89,8 @@ module processor #(
                         counter <= 0;
                 end
         end 
+
+    assign instr = data_out;
 
     `ifdef SIMULATION
         always @(posedge clock) 
