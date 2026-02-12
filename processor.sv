@@ -29,6 +29,12 @@ module processor #(
     logic [2:0] funct3;
     logic [6:0] funct7;
 
+    logic [31:0] Uimm;
+    logic [31:0] Iimm;
+    logic [31:0] Simm;
+    logic [31:0] Bimm;
+    logic [31:0] Jimm;
+
     bram_sdp #(
         .WIDTH(32), 
         .DEPTH(128),
@@ -60,7 +66,12 @@ module processor #(
         .rs2Id,
         .rdId,
         .funct3,
-        .funct7
+        .funct7,
+        .Uimm,
+        .Iimm,
+        .Simm,
+        .Bimm,
+        .Jimm
     );
 
     always_ff @(posedge clock, posedge reset) 
