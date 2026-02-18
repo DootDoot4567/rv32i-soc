@@ -34,6 +34,21 @@ module processor #(
     logic [31:0] Bimm;
     logic [31:0] Jimm;
 
+    logic [31:0] rs1;
+    logic [31:0] rs2;
+
+    logic [31:0] registerFile [31:0];
+
+    logic [31:0] aluOut;
+    logic [31:0] writeBackData;
+    logic writeBackEn;
+
+    localparam FETCH_INSTR = 0;
+    localparam FETCH_REGS = 1;
+    localparam EXECUTE = 2;
+
+    logic [1:0] state = FETCH_INSTR;
+
     bram_sdp #(
         .WIDTH(32), 
         .DEPTH(128),
@@ -73,6 +88,56 @@ module processor #(
         .Jimm
     );
 
+    alu alu_inst (
+        .rs1,
+        .rs2,
+        .isALUreg,
+        .instr,
+        .funct3,
+        .funct7,
+        .Iimm,
+        .aluOut
+    );
+   
+    always_ff @(posedge clock) 
+        begin
+            if(!reset) 
+                begin
+                    pc    <= 0;
+                    state <= FETCH_INSTR;
+                end 
+            else 
+                begin
+                    if(writeBackEn && rdId != 0) 
+                        begin
+                            registerFile[rdId] <= writeBackData;
+
+                            // For displaying what happens.
+                            //if(rdId == 1) begin
+                            //    leds <= writeBackData;
+                            //end
+	                    end
+                 end
+            case(state)
+                FETCH_INSTR: 
+                    begin
+                        instr <= data_out;
+                        state <= FETCH_REGS;
+                    end
+                FETCH_REGS: 
+                    begin
+                        rs1 <= registerFile[rs1Id];
+                        rs2 <= registerFile[rs2Id];
+                        state <= EXECUTE;
+                    end
+                EXECUTE: 
+                    begin
+                        pc <= pc + 1;
+                        state <= FETCH_INSTR;
+                    end
+            endcase
+      end
+
     always_ff @(posedge clock, posedge reset) 
         begin
             if (reset)
@@ -89,7 +154,9 @@ module processor #(
                 end
         end 
 
-    assign instr = data_out;
+    // register write back
+    assign writeBackData = aluOut; 
+    assign writeBackEn = (state == EXECUTE && (isALUreg || isALUimm));   
 
     `ifdef SIMULATION
         always @(posedge clock) 
