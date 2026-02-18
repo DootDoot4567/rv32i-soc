@@ -1,15 +1,16 @@
 module alu(
     input logic [31:0] rs1,
     input logic [31:0] rs2,
-    input logic isALUreg,
     
     input logic [31:0] instr,
 
     input logic [2:0] funct3,
     input logic [6:0] funct7,
 
+    input logic isALUreg,
     input logic [31:0] Iimm,
 
+    output logic takeBranch,
     output logic [31:0] aluOut
 );
 
@@ -34,4 +35,17 @@ module alu(
             endcase
         end
 
+    always_comb
+        begin
+            case(funct3)
+                3'b000: takeBranch = (rs1 == rs2);
+                3'b001: takeBranch = (rs1 != rs2);
+                3'b100: takeBranch = ($signed(rs1) < $signed(rs2));
+                3'b101: takeBranch = ($signed(rs1) >= $signed(rs2));
+                3'b110: takeBranch = (rs1 < rs2);
+                3'b111: takeBranch = (rs1 >= rs2);
+
+	            default: takeBranch = 1'b0;
+            endcase
+        end
 endmodule
