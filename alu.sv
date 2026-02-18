@@ -1,7 +1,7 @@
 module alu(
     input logic [31:0] rs1,
     input logic [31:0] rs2,
-    input logic [6:0] isALUreg,
+    input logic isALUreg,
     
     input logic [31:0] instr,
 
