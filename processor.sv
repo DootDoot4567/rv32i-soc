@@ -43,16 +43,20 @@ module processor #(
     logic [31:0] writeBackData;
     logic writeBackEn;
 
-    localparam FETCH_INSTR = 0;
-    localparam FETCH_REGS = 1;
-    localparam EXECUTE = 2;
+    localparam HALT = 3'b000;
+    localparam INITIAL = 3'b001;
+    localparam FETCH = 3'b010;
+    localparam DECODE = 3'b011;
+    localparam EXECUTE = 3'b100;
+    localparam MEMORY = 3'b101;
+    localparam WRITE_BACK = 3'b110;
 
-    logic [1:0] state = FETCH_INSTR;
+    logic [3:0] state; 
 
     bram_sdp #(
         .WIDTH(32), 
         .DEPTH(128),
-        .INIT("instructions.mem")
+        .INIT(INIT)
     ) bram_inst (
         .clock_write(1'b0),
         .clock_read(clock),
@@ -99,64 +103,101 @@ module processor #(
         .aluOut
     );
    
-    always_ff @(posedge clock) 
+    always @(posedge clock) 
         begin
-            if(!reset) 
+            if(reset) 
                 begin
-                    pc    <= 0;
-                    state <= FETCH_INSTR;
+                    if (pc == 71)
+                        begin
+                            pc <= 0;
+                        end
+                    else
+                        begin
+                            pc <= pc + 1;
+                        end
+                    state <= HALT;
                 end 
-            else 
-                begin
+            else
+                begin                  
+                    read_enable <= 1;
+
                     if(writeBackEn && rdId != 0) 
                         begin
                             registerFile[rdId] <= writeBackData;
+            
+                            `ifdef SIMULATION	 
+                                    $display("x%0d <= %b",rdId,writeBackData);
+                            `endif	 
+                        end
 
-                            // For displaying what happens.
-                            //if(rdId == 1) begin
-                            //    leds <= writeBackData;
-                            //end
-	                    end
-                 end
-            case(state)
-                FETCH_INSTR: 
-                    begin
-                        instr <= data_out;
-                        state <= FETCH_REGS;
-                    end
-                FETCH_REGS: 
-                    begin
-                        rs1 <= registerFile[rs1Id];
-                        rs2 <= registerFile[rs2Id];
-                        state <= EXECUTE;
-                    end
-                EXECUTE: 
-                    begin
-                        pc <= pc + 1;
-                        state <= FETCH_INSTR;
-                    end
-            endcase
-      end
+                    case(state)
+                        HALT: 
+                            begin
+                                state <= HALT;
 
-    always_ff @(posedge clock, posedge reset) 
-        begin
-            if (reset)
-                begin
-                    read_enable <= 1;
-                    pc <= 0;
+                                if (reset) 
+                                    begin
+                                        
+                                    end
+                            end
+                        INITIAL:
+                            begin
+                                instr <= data_out;
+                            end
+                        FETCH:
+                            begin
+                                read_enable <= 1;
+                            end
+                        DECODE: 
+                            begin
+                                rs1 <= registerFile[rs1Id];
+                                rs2 <= registerFile[rs2Id];
+                                state <= EXECUTE;
+                            end
+                        EXECUTE: 
+                            begin
+                                if (!isSYSTEM) 
+                                    begin
+                                        if (pc == 72)
+                                            begin
+                                                pc <= 0;
+                                            end
+                                        else
+                                            begin
+                                                pc <= pc + 1;
+                                            end
+                                    end
+                                
+                                state <= MEMORY;	          
+                            end
+                        MEMORY:
+                            begin
+                                state <= WRITE_BACK;
+                            end
+                        WRITE_BACK:
+                            begin
+                                writeBackData = (isJAL || isJALR) ? (PC + 4) :
+                                                (isLUI) ? Uimm :
+                                                (isAUIPC) ? (PC + Uimm) :
+                                                aluOut;
+
+                                // register write back
+                                assign writeBackData = aluOut; 
+                                assign writeBackEn = (
+                                    state == EXECUTE && (
+                                        isALUreg || 
+                                        isALUimm ||
+                                        isJAL ||
+                                        isJALR ||
+                                        isLUI ||
+                                        isAUIPC
+                                    )
+                                );  
+                                state <= FETCH;
+                            end
+                    endcase 
                 end
-            else 
-                begin
-                    pc <= pc + 1;
-
-                    if (pc == 73)
-                        pc <= 0;
-                end
-        end 
-
-    // register write back
-    assign writeBackData = aluOut; 
-    assign writeBackEn = (state == EXECUTE && (isALUreg || isALUimm));   
+        end
 
     `ifdef SIMULATION
         always @(posedge clock) 
@@ -177,7 +218,5 @@ module processor #(
                 endcase
             end
     `endif
-
-
 
 endmodule
