@@ -9,14 +9,14 @@ module bram_sdp #(
     parameter DEPTH=256, 
     parameter INIT=""
     ) (
-    input logic clock_write,
-    input logic clock_read,
-    input logic write_enable,
-    input logic read_enable,
-    input logic [ADDR_WIDTH-1:0] addr_write,
-    input logic [ADDR_WIDTH-1:0] addr_read,
-    input logic [WIDTH-1:0] data_in,
-    output logic [WIDTH-1:0] data_out
+    input logic clockWrite,
+    input logic clockRead,
+    input logic writeEnable,
+    input logic readEnable,
+    input logic [ADDR_WIDTH-1:0] addrWrite,
+    input logic [ADDR_WIDTH-1:0] addrRead,
+    input logic [WIDTH-1:0] dataIn,
+    output logic [WIDTH-1:0] dataOut
 );
 
     localparam ADDR_WIDTH=$clog2(DEPTH);
@@ -31,12 +31,12 @@ module bram_sdp #(
     end
 
     // Port A: Sync Write
-    always_ff @(posedge clock_write) begin
-        if (write_enable) memory[addr_write] <= data_in;
+    always_ff @(posedge clockWrite) begin
+        if (writeEnable) memory[addrWrite] <= dataIn;
     end
 
     // Port B: Sync Read
-    always_ff @(posedge clock_read) begin
-        if (read_enable) data_out <= memory[addr_read];
+    always_ff @(posedge clockRead) begin
+        if (readEnable) dataOut <= memory[addrRead];
     end
 endmodule

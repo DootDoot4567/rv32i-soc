@@ -6,9 +6,8 @@ module processor #(
 );
     logic [6:0] pc = 0;
 
-    logic [31:0] data_out;
+    logic [31:0] dataOut;
     logic [31:0] instr;
-    logic read_enable = 0;
 
     logic isALUreg;
     logic isALUimm;
@@ -41,7 +40,10 @@ module processor #(
 
     logic [31:0] aluOut;
     logic [31:0] writeBackData;
-    logic writeBackEn;
+
+    logic writeBackEnable = 0;
+    logic readEnable = 0;
+    logic takeBranch;
 
     localparam HALT = 3'b000;
     localparam INITIAL = 3'b001;
@@ -58,14 +60,14 @@ module processor #(
         .DEPTH(128),
         .INIT(INIT)
     ) bram_inst (
-        .clock_write(1'b0),
-        .clock_read(clock),
-        .write_enable(1'b0),
-        .read_enable(read_enable),
-        .addr_write(7'b0000000),
-        .addr_read(pc),
-        .data_in(0),
-        .data_out
+        .clockWrite(1'b0),
+        .clockRead(clock),
+        .writeEnable(1'b0),
+        .readEnable(readEnable),
+        .addrWrite(7'b0000000),
+        .addrRead(pc),
+        .dataIn(0),
+        .dataOut
     );
 
     decoder decoder_inst (
@@ -95,11 +97,12 @@ module processor #(
     alu alu_inst (
         .rs1,
         .rs2,
-        .isALUreg,
         .instr,
         .funct3,
         .funct7,
+        .isALUreg,
         .Iimm,
+        .takeBranch,
         .aluOut
     );
    
@@ -119,9 +122,9 @@ module processor #(
                 end 
             else
                 begin                  
-                    read_enable <= 1;
+                    readEnable <= 1;
 
-                    if(writeBackEn && rdId != 0) 
+                    if(writeBackEnable && rdId != 0) 
                         begin
                             registerFile[rdId] <= writeBackData;
             
@@ -142,11 +145,11 @@ module processor #(
                             end
                         INITIAL:
                             begin
-                                instr <= data_out;
+                                instr <= dataOut;
                             end
                         FETCH:
                             begin
-                                read_enable <= 1;
+                                readEnable <= 1;
                             end
                         DECODE: 
                             begin
@@ -164,7 +167,11 @@ module processor #(
                                             end
                                         else
                                             begin
-                                                pc <= pc + 1;
+                                                pc <= (isBranch && takeBranch) ?
+                                                     pc+Bimm :
+                                                isJAL ? pc+Jimm :
+                                                isJALR ? rs1+Iimm :
+	                                            pc+4;
                                             end
                                     end
                                 
@@ -176,14 +183,12 @@ module processor #(
                             end
                         WRITE_BACK:
                             begin
-                                writeBackData = (isJAL || isJALR) ? (PC + 4) :
+                                writeBackData = (isJAL || isJALR) ? (pc + 4) :
                                                 (isLUI) ? Uimm :
-                                                (isAUIPC) ? (PC + Uimm) :
+                                                (isAUIPC) ? (pc + Uimm) :
                                                 aluOut;
 
-                                // register write back
-                                assign writeBackData = aluOut; 
-                                assign writeBackEn = (
+                                writeBackEnable = (
                                     state == EXECUTE && (
                                         isALUreg || 
                                         isALUimm ||
@@ -203,7 +208,7 @@ module processor #(
         always @(posedge clock) 
             begin
                 $display("PC=%0d instr=%h", pc, instr);
-                $display("Instruction opcode %b", data_out[6:0]);
+                $display("Instruction opcode %b", dataOut[6:0]);
                 case (1'b1)
                     isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
                     isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
