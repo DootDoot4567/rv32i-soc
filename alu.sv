@@ -31,31 +31,67 @@ module alu(
 );
     //Create a shifter function to flip all 32 bits
     function [31:0] flip32(input [31:0] x);
-        flip32 = x[0 +: 32] = [::-1]; //Reverse all 32 bits 
+        //Use if simulator supports array slicing
+        //flip32 = x[0 +: 32] = [::-1];
+
+        //Otherwise:
+        flip32 = {x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], 
+		    x[8], x[9], x[10], x[11], x[12], x[13], x[14], x[15], 
+		    x[16], x[17], x[18], x[19], x[20], x[21], x[22], x[23],
+		    x[24], x[25], x[26], x[27], x[28], x[29], x[30], x[31]};
     endfunction
 
-    //Declare and initialize both inputs for the ALU
-    logic [31:0] aluIn1 = rs1;
-    logic [31:0] aluIn2 = isALUreg | isBranch ? rs2 : Iimm;
+    logic takeBranch;
+    
+    logic [31:0] aluIn1;
+    logic [31:0] aluIn2;
 
-    logic [32:0] aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
-    logic [31:0] aluPlus = aluIn1 + aluIn2;
+    logic [32:0] aluMinus;
+    logic [31:0] aluPlus;
 
-    logic isEquality = (aluMinus == 0);
-    logic isLessThanUnsigned = aluMinus[32];
-    logic isLessthanSigned = (aluIn1 ^ aluIn2) ? aluIn1[31] : aluMinus[32];
+    logic isEquality;
+    logic isLessThanUnsigned;
+    logic isLessthanSigned;
 
-    logic [31:0] shifterIn = (funct3 == 3'b001) ? flip32(aluIn1) : aluIn1;
-    logic [31:0] shifter = $signed({(instr[30] & aluIn1[31]), shifterIn}) >>> aluIn2[4:0];
+    logic [31:0] shifterIn;
+    logic [31:0] shifter;
+    logic [31:0] leftShift;
 
-    logic [31:0] leftShift = flip32(shifter);
+    logic [31:0] pcPlusImm;
+    logic [31:0] pcPlus4;
 
-    logic [31:0] pcPlusImm = pc + ( instr[3] ? Jimm[31:0] :
-				                    instr[4] ? Uimm[31:0] :
-				                    Bimm[31:0] );
+    //Drive both inputs for the ALU and ALU operations
+    assign aluIn1 = rs1;
+    assign aluIn2 = (isALUreg | isBranch) ? rs2 : Iimm;
+
+    assign aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
+    assign aluPlus = aluIn1 + aluIn2;
+
+    assign isEquality = (aluMinus == 0);
+    assign isLessThanUnsigned = aluMinus[32];
+    assign isLessthanSigned = (aluIn1 ^ aluIn2) ? aluIn1[31] : aluMinus[32];
+
+    assign shifterIn = (funct3 == 3'b001) ? flip32(aluIn1) : aluIn1;
+    assign shifter = $signed({(instr[30] & aluIn1[31]), shifterIn}) >>> aluIn2[4:0];
+
+    assign leftShift = flip32(shifter);
+
+    assign pcPlusImm = pc + ( instr[3] ? Jimm[31:0] :
+                                    instr[4] ? Uimm[31:0] :
+                                    Bimm[31:0] );
         
-    logic [31:0] pcPlus4 = pc + 4;
+    assign pcPlus4 = pc + 4;
 
+    //Computed values for the writeback and the next program counter
+    assign writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
+			                            (isLUI) ? Uimm :
+                                        (isAUIPC) ? pcPlusImm :
+			                             aluOut;
+
+    assign nextPcCandidate = ((isBranch && takeBranch) || isJAL) ? 
+                                pcPlusImm  : isJALR ? 
+                                    {aluPlus[31:1],1'b0} : pcPlus4;
+ 
     //Define combinatorial operatations in ALU
     always_comb 
         begin
@@ -82,15 +118,5 @@ module alu(
 
 	            default: takeBranch = 1'b0;
             endcase
-
-            //Computed values for the writeback and the next program counter
-            writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
-			                            (isLUI) ? Uimm :
-                                        (isAUIPC) ? pcPlusImm :
-			                             aluOut;
-
-            nextPcCandidate = ((isBranch && takeBranch) || isJAL) ? 
-                                pcPlusImm  : isJALR ? 
-                                    {aluPlus[31:1],1'b0} : pcPlus4;
         end
 endmodule
