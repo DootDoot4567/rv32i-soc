@@ -26,17 +26,12 @@ module alu(
     input logic [6:0] funct7,
 
     output logic [31:0] aluOut,
-    output logic takeBranch,
-    output logic [31:0] writeBackDataValue,
-    output logic [31:0] nextPc
+    output logic [31:0] writeBackDataCandidate,
+    output logic [31:0] nextPcCandidate
 );
     //Create a shifter function to flip all 32 bits
-    function [31:0] flip32;
-        input [31:0] x;
-        flip32 = {x[ 0], x[ 1], x[ 2], x[ 3], x[ 4], x[ 5], x[ 6], x[ 7], 
-		    x[ 8], x[ 9], x[10], x[11], x[12], x[13], x[14], x[15], 
-		    x[16], x[17], x[18], x[19], x[20], x[21], x[22], x[23],
-		    x[24], x[25], x[26], x[27], x[28], x[29], x[30], x[31]};
+    function [31:0] flip32(input [31:0] x);
+        flip32 = x[0 +: 32] = [::-1]; //Reverse all 32 bits 
     endfunction
 
     //Declare and initialize both inputs for the ALU
@@ -89,13 +84,13 @@ module alu(
             endcase
 
             //Computed values for the writeback and the next program counter
-            writeBackDataValue = (isJAL || isJALR) ? (pcPlus4) :
+            writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
 			                            (isLUI) ? Uimm :
                                         (isAUIPC) ? pcPlusImm :
 			                             aluOut;
 
-            nextPc = (isBranch && takeBranch || isJAL) ? pcPlusImm  :
-                            isJALR                   ? {aluPlus[31:1],1'b0} :
-                            pcPlus4;
+            nextPcCandidate = ((isBranch && takeBranch) || isJAL) ? 
+                                pcPlusImm  : isJALR ? 
+                                    {aluPlus[31:1],1'b0} : pcPlus4;
         end
 endmodule

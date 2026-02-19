@@ -4,7 +4,7 @@ module processor #(
     input logic clock,
     input logic reset
 );
-    logic [6:0] pc = 0;
+    logic [31:0] pc = 0;
 
     logic [31:0] dataOut;
     logic [31:0] instr;
@@ -43,7 +43,10 @@ module processor #(
 
     logic writeBackEnable = 0;
     logic readEnable = 0;
-    logic takeBranch;
+
+    logic [31:0] nextPcCandidate;
+    logic [31:0] writeBackDataCandidate;
+
 
     localparam HALT = 3'b000;
     localparam INITIAL = 3'b001;
@@ -53,7 +56,7 @@ module processor #(
     localparam MEMORY = 3'b101;
     localparam WRITE_BACK = 3'b110;
 
-    logic [3:0] state; 
+    logic [3:0] state = HALT; 
 
     bram_sdp #(
         .WIDTH(32), 
@@ -64,7 +67,7 @@ module processor #(
         .clockRead(clock),
         .writeEnable(1'b0),
         .readEnable(readEnable),
-        .addrWrite(7'b0000000),
+        .addrWrite(32'b0),
         .addrRead(pc),
         .dataIn(0),
         .dataOut
@@ -97,42 +100,40 @@ module processor #(
     alu alu_inst (
         .rs1,
         .rs2,
+        .pc,
         .instr,
+        .isALUreg,
+        .isALUimm,
+        .isBranch,
+        .isJALR,
+        .isJAL,
+        .isAUIPC,
+        .isLUI,
+        .isLoad,
+        .isStore,
+        .isSYSTEM,
+        .Uimm,
+        .Iimm,
+        .Simm,
+        .Bimm,
+        .Jimm,
         .funct3,
         .funct7,
-        .isALUreg,
-        .Iimm,
-        .takeBranch,
-        .aluOut
+        .aluOut,
+        .writeBackDataValueCandidate,
+        .nextPcCandidate
     );
    
     always @(posedge clock) 
         begin
             if(reset) 
                 begin
-                    if (pc == 71)
-                        begin
-                            pc <= 0;
-                        end
-                    else
-                        begin
-                            pc <= pc + 1;
-                        end
+                    pc <= 0;
+                    writeBackEnable <= 0;
                     state <= HALT;
                 end 
             else
-                begin                  
-                    readEnable <= 1;
-
-                    if(writeBackEnable && rdId != 0) 
-                        begin
-                            registerFile[rdId] <= writeBackData;
-            
-                            `ifdef SIMULATION	 
-                                    $display("x%0d <= %b",rdId,writeBackData);
-                            `endif	 
-                        end
-
+                begin
                     case(state)
                         HALT: 
                             begin
@@ -140,7 +141,9 @@ module processor #(
 
                                 if (reset) 
                                     begin
-                                        
+                                        pc <= 0;
+                                        writeBackEnable <= 0;
+                                        state <= INIT;
                                     end
                             end
                         INITIAL:
@@ -167,11 +170,7 @@ module processor #(
                                             end
                                         else
                                             begin
-                                                pc <= (isBranch && takeBranch) ?
-                                                     pc+Bimm :
-                                                isJAL ? pc+Jimm :
-                                                isJALR ? rs1+Iimm :
-	                                            pc+4;
+                                                pc <= nextPcCandidate;
                                             end
                                     end
                                 
@@ -183,21 +182,18 @@ module processor #(
                             end
                         WRITE_BACK:
                             begin
-                                writeBackData = (isJAL || isJALR) ? (pc + 4) :
-                                                (isLUI) ? Uimm :
-                                                (isAUIPC) ? (pc + Uimm) :
-                                                aluOut;
+                                writeBackData <= writeBackDataCandidate;
 
-                                writeBackEnable = (
-                                    state == EXECUTE && (
-                                        isALUreg || 
-                                        isALUimm ||
-                                        isJAL ||
-                                        isJALR ||
-                                        isLUI ||
-                                        isAUIPC
-                                    )
-                                );  
+                                writeBackEnable <= (!isBranch);
+
+                                if(writeBackEnable && rdId != 0) 
+                                    begin
+                                        registerFile[rdId] <= writeBackData;
+                        
+                                        // `ifdef SIMULATION	 
+                                        //         $display("x%0d <= %b",rdId,writeBackData);
+                                        // `endif	 
+                                    end
                                 state <= FETCH;
                             end
                     endcase 
