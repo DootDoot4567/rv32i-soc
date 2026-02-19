@@ -16,6 +16,8 @@ module execution_tb();
 
     logic reset;
 
+    initial reset = 1;
+
     processor #(
         .INIT(INIT)
     ) processor_inst (
