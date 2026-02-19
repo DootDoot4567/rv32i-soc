@@ -47,6 +47,7 @@ module alu(
     logic [31:0] aluIn2;
 
     logic [32:0] aluMinus;
+    logic [31:0] aluMinus32;
     logic [31:0] aluPlus;
 
     logic isEquality;
@@ -62,7 +63,7 @@ module alu(
 
     //Drive both inputs for the ALU and ALU operations
     assign aluIn1 = rs1;
-    assign aluIn2 = (isALUreg | isBranch) ? rs2 : Iimm;
+    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
 
     assign aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
     assign aluPlus = aluIn1 + aluIn2;
@@ -91,13 +92,15 @@ module alu(
     assign nextPcCandidate = ((isBranch && takeBranch) || isJAL) ? 
                                 pcPlusImm  : isJALR ? 
                                     {aluPlus[31:1],1'b0} : pcPlus4;
+
+    assign aluMinus32 = aluMinus[31:0];
  
     //Define combinatorial operatations in ALU
     always_comb 
         begin
             //Alu logic 
             case(funct3)
-                3'b000: aluOut = (funct7[5] & instr[5]) ? aluMinus[31:0] : aluPlus;
+                3'b000: aluOut = (funct7[5] & instr[5]) ? aluMinus32 : aluPlus;
                 3'b001: aluOut = leftShift;
                 3'b010: aluOut = {31'b0, isLessthanSigned};
 	            3'b011: aluOut = {31'b0, isLessThanUnsigned};
