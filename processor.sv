@@ -38,6 +38,11 @@ module processor #(
 
     logic [31:0] registerFile [31:0];
 
+    initial 
+        begin
+            $readmemh("register_init.txt", registerFile);
+        end
+
     logic [31:0] aluOut;
     logic [31:0] writeBackData;
 
@@ -67,10 +72,10 @@ module processor #(
         .clockRead(clock),
         .writeEnable(1'b0),
         .readEnable(readEnable),
-        .addrWrite(32'b0),
-        .addrRead(pc),
+        .addrWrite(7'b0),
+        .addrRead(pc[8:2]),
         .dataIn(0),
-        .dataOut
+        .dataOut(dataOut)
     );
 
     decoder decoder_inst (
@@ -120,51 +125,51 @@ module processor #(
         .funct3,
         .funct7,
         .aluOut,
-        .writeBackDataValueCandidate,
+        .writeBackDataCandidate,
         .nextPcCandidate
     );
    
     always @(posedge clock) 
         begin
-            if(reset) 
-                begin
-                    pc <= 0;
-                    writeBackEnable <= 0;
-                    state <= HALT;
-                end 
-            else
-                begin
-                    case(state)
-                        HALT: 
+            case(state)
+                HALT: 
+                    begin
+                        if (reset) 
+                            begin
+                                pc <= 12;
+                                writeBackEnable <= 0;
+                                state <= INITIAL;
+                            end
+                        else
                             begin
                                 state <= HALT;
-
-                                if (reset) 
+                            end
+                    end
+                INITIAL:
+                    begin
+                        readEnable <= 1;
+                        state <= FETCH;
+                    end
+                FETCH:
+                    begin
+                        readEnable <= 1;
+                        state <= DECODE;
+                    end
+                DECODE: 
+                    begin
+                        instr <= dataOut;
+                        readEnable <= 0;
+                        rs1 <= registerFile[rs1Id];
+                        rs2 <= registerFile[rs2Id];
+                        state <= EXECUTE;
+                    end
+                EXECUTE: 
+                    begin
+                        if (!isSYSTEM) 
+                            begin
+                                if (!isSYSTEM)
                                     begin
-                                        pc <= 0;
-                                        writeBackEnable <= 0;
-                                        state <= INIT;
-                                    end
-                            end
-                        INITIAL:
-                            begin
-                                instr <= dataOut;
-                            end
-                        FETCH:
-                            begin
-                                readEnable <= 1;
-                            end
-                        DECODE: 
-                            begin
-                                rs1 <= registerFile[rs1Id];
-                                rs2 <= registerFile[rs2Id];
-                                state <= EXECUTE;
-                            end
-                        EXECUTE: 
-                            begin
-                                if (!isSYSTEM) 
-                                    begin
-                                        if (pc == 72)
+                                        if (pc == 288)
                                             begin
                                                 pc <= 0;
                                             end
@@ -173,31 +178,32 @@ module processor #(
                                                 pc <= nextPcCandidate;
                                             end
                                     end
-                                
-                                state <= MEMORY;	          
                             end
-                        MEMORY:
-                            begin
-                                state <= WRITE_BACK;
-                            end
-                        WRITE_BACK:
-                            begin
-                                writeBackData <= writeBackDataCandidate;
-
-                                writeBackEnable <= (!isBranch);
-
-                                if(writeBackEnable && rdId != 0) 
-                                    begin
-                                        registerFile[rdId] <= writeBackData;
                         
-                                        // `ifdef SIMULATION	 
-                                        //         $display("x%0d <= %b",rdId,writeBackData);
-                                        // `endif	 
-                                    end
-                                state <= FETCH;
+                        state <= MEMORY;	          
+                    end
+                MEMORY:
+                    begin
+                        state <= WRITE_BACK;
+                    end
+                WRITE_BACK:
+                    begin
+                        writeBackData <= writeBackDataCandidate;
+
+                        writeBackEnable <= (!isBranch) & (!isStore);
+
+                        if(writeBackEnable && rdId != 0) 
+                            begin
+                                registerFile[rdId] <= writeBackData;
+                
+                                // `ifdef SIMULATION	 
+                                //          $display("x%0d <= %b",rdId,writeBackData);
+                                // `endif	 
                             end
-                    endcase 
-                end
+                        
+                        state <= FETCH;
+                    end
+            endcase 
         end
 
     `ifdef SIMULATION
