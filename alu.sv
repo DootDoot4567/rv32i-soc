@@ -47,7 +47,6 @@ module alu(
     logic [31:0] aluIn2;
 
     logic [32:0] aluMinus;
-    logic [31:0] aluMinus32;
     logic [31:0] aluPlus;
 
     logic isEquality;
@@ -82,25 +81,23 @@ module alu(
                                     Bimm[31:0] );
         
     assign pcPlus4 = pc + 4;
-
-    //Computed values for the writeback and the next program counter
-    assign writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
-			                            (isLUI) ? Uimm :
-                                        (isAUIPC) ? pcPlusImm :
-			                             aluOut;
-
-    assign nextPcCandidate = ((isBranch && takeBranch) || isJAL) ? 
-                                pcPlusImm  : isJALR ? 
-                                    {aluPlus[31:1],1'b0} : pcPlus4;
-
-    assign aluMinus32 = aluMinus[31:0];
  
     //Define combinatorial operatations in ALU
-    always_comb 
+    always @(*)
         begin
+             //Branch decision logic 
+            case(funct3)
+                3'b000: takeBranch = isEquality;
+                3'b001: takeBranch = !isEquality;
+                3'b100: takeBranch = isLessthanSigned;
+                3'b101: takeBranch = !isLessthanSigned;
+                3'b110: takeBranch = isLessThanUnsigned;
+                3'b111: takeBranch = !isLessThanUnsigned;
+            endcase
+
             //Alu logic 
             case(funct3)
-                3'b000: aluOut = (funct7[5] & instr[5]) ? aluMinus32 : aluPlus;
+                3'b000: aluOut = (funct7[5] & instr[5]) ? aluMinus[31:0] : aluPlus;
                 3'b001: aluOut = leftShift;
                 3'b010: aluOut = {31'b0, isLessthanSigned};
 	            3'b011: aluOut = {31'b0, isLessThanUnsigned};
@@ -109,17 +106,22 @@ module alu(
 	            3'b110: aluOut = (aluIn1 | aluIn2);
 	            3'b111: aluOut = (aluIn1 & aluIn2);
             endcase
+           
+           //Computed values for the writeback and the next program counter
+            writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
+                                                (isLUI) ? Uimm :
+                                                (isAUIPC) ? pcPlusImm :
+                                                aluOut;
 
-            //Branch decision logic 
-            case(funct3)
-                3'b000: takeBranch = isEquality;
-                3'b001: takeBranch = !isEquality;
-                3'b100: takeBranch = isLessthanSigned;
-                3'b101: takeBranch = !isLessthanSigned;
-                3'b110: takeBranch = isLessThanUnsigned;
-                3'b111: takeBranch = !isLessThanUnsigned;
-
-	            default: takeBranch = 1'b0;
-            endcase
+            nextPcCandidate = pcPlus4;
+            
+            if ((isBranch && takeBranch) || isJAL)
+                begin
+                    nextPcCandidate = pcPlusImm;
+                end
+            else if (isJALR)
+                begin
+                    nextPcCandidate = {aluPlus[31:1],1'b0};
+                end
         end
 endmodule
