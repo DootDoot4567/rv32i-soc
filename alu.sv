@@ -69,7 +69,7 @@ module alu(
 
     assign isEquality = (aluMinus == 0);
     assign isLessThanUnsigned = aluMinus[32];
-    assign isLessthanSigned = (aluIn1 ^ aluIn2) ? aluIn1[31] : aluMinus[32];
+    assign isLessthanSigned = (aluIn1[31] ^ aluIn2[31]) ? aluIn1[31] : aluMinus[32];
 
     assign shifterIn = (funct3 == 3'b001) ? flip32(aluIn1) : aluIn1;
     assign shifter = $signed({(instr[30] & aluIn1[31]), shifterIn}) >>> aluIn2[4:0];
@@ -108,10 +108,20 @@ module alu(
             endcase
            
            //Computed values for the writeback and the next program counter
-            writeBackDataCandidate = (isJAL || isJALR) ? (pcPlus4) :
-                                                (isLUI) ? Uimm :
-                                                (isAUIPC) ? pcPlusImm :
-                                                aluOut;
+            writeBackDataCandidate = aluOut;
+
+            if (isJAL || isJALR) 
+                begin
+                    writeBackDataCandidate = pcPlus4;
+                end
+            else if (isLUI)
+                begin
+                    writeBackDataCandidate = Uimm;
+                end
+            else if (isAUIPC)
+                begin 
+                    writeBackDataCandidate = pcPlusImm;
+                end
 
             nextPcCandidate = pcPlus4;
             
