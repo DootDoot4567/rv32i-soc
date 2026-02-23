@@ -75,6 +75,9 @@ module processor #(
 
     logic [3:0] state = HALT; 
 
+    //Debugging signal
+    logic isFetch = 0;
+
     bram_sdp #(
         .WIDTH(32), 
         .DEPTH(73),
@@ -184,6 +187,7 @@ module processor #(
                         //we use the second bit because we increment by 4 for the pc. the 2 bit corresponds to the first line in our .mem file
                         addrRead <= pc[8:2];
                         writeBackEnable <= 0;
+                        isFetch <= 1;
 
                         state <= FETCH;
                     end
@@ -196,6 +200,8 @@ module processor #(
 
                         addrRead <= nextPcCandidate[8:2];
 
+                        isFetch <= 0;
+
                         state <= DECODE;
                     end
                 DECODE: 
@@ -206,9 +212,6 @@ module processor #(
                         instr <= dataOut; 
                         //instr <= 32'h123450b7;
 
-                        rs1 <= registerFile[rs1Id];
-                        rs2 <= registerFile[rs2Id];
-
                         state <= EXECUTE;
                     end
                 EXECUTE: 
@@ -217,6 +220,9 @@ module processor #(
                         //if its branch or jump then update pc 
 
                         //if load or a store, then read or write enable goes up so that its ready for mem state
+
+                        rs1 <= registerFile[rs1Id];
+                        rs2 <= registerFile[rs2Id];
 
                         if (!isSYSTEM)
                             begin
@@ -270,6 +276,8 @@ module processor #(
 
                         writeBackEnable <= 0;
                         readEnable <= 1;
+
+                        isFetch <= 1;
                         state <= FETCH;
                     end
             endcase
@@ -278,9 +286,13 @@ module processor #(
     `ifdef SIMULATION
         always @(posedge clock) 
             begin
-                $display("PC=%0d instr=%h", pc, instr);
-                $display("Instruction opcode %b", dataOut[6:0]);
-                case (1'b1)
+                if (isFetch)
+                    begin
+                        $display("PC=%0d instr=%h", pc, instr);
+                        $display("Instruction opcode %b", dataOut[6:0]);
+                    end
+                
+                case (isFetch)
                     isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
                     isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
                     isLoad:   $display("LOAD");
