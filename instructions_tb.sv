@@ -4,49 +4,47 @@
 `define SIMULATION
 
 module instructions_tb ();
-    parameter MEMORY_INIT="instructions_memory_state.mem";
+    parameter MEMORY_INIT="instructions.mem";
 
     logic clock;
-    logic clock4x;
+    //logic clock4x;
 
     initial clock = 0;
-    initial clock4x = 0;
+    //initial clock4x = 0;
 
     localparam CLOCK_HALF_PERIOD = 40;  // 12.5 MHz
-    localparam CLOCK_4X_HALF_PERIOD = 10;  // 50 MHz
+    //localparam CLOCK_4X_HALF_PERIOD = 10;  // 50 MHz
 
     always #(CLOCK_HALF_PERIOD) clock = ~clock;
-    always #(CLOCK_4X_HALF_PERIOD) clock4x = ~clock4x;
+    //always #(CLOCK_4X_HALF_PERIOD) clock4x = ~clock4x;
 
     logic reset;
 
-    soc #(
-        .MEMORY_INIT(MEMORY_INIT)
-    ) soc_inst (
-        .clock12m(clock),
-        .clock48m(clock4x),
-        .reset_button(reset)
+    processor #(
+        .INIT(MEMORY_INIT)
+    ) processor_inst (
+        .clock(clock),
+        .reset(reset)
     );
 
     // Helper methods
 
     task automatic step(int cycles = 5);
-        repeat (cycles) begin
-            @(posedge clock);
-        end
+        repeat (cycles) @(posedge clock);
     endtask
 
     task automatic expect_reg(int r, logic [31:0] expected, string message);
-        logic [31:0] found = soc_inst.processor_inst.registers[r];
+        logic [31:0] found = processor_inst.registerFile[r];
 
-        if (found !== expected) begin
-            $error("FAIL %-28s x%0d expected=0x%08x got=0x%08x", message, r, expected, found);
-            $fatal;
-        end
+        if (found !== expected) 
+            begin
+                $error("FAIL %-28s x%0d expected=0x%08x got=0x%08x", message, r, expected, found);
+                $fatal;
+            end
     endtask
 
     task automatic expect_mem(int addr, logic [31:0] expected, string message);
-        logic [31:0] found = soc_inst.memory_inst.sram[addr];
+        logic [31:0] found = processor_inst.bram_inst.memory[addr];
 
         if (found !== expected) begin
             $error("FAIL %-28s mem[%0d] expected=0x%08x got=0x%08x", message, addr, expected, found);
@@ -55,7 +53,7 @@ module instructions_tb ();
     endtask
 
     task automatic expect_nonzero(int r, string message);
-        logic [31:0] found = soc_inst.processor_inst.registers[r];
+        logic [31:0] found = processor_inst.registerFile[r]; 
 
         if (found === 32'h0) begin
             $error("FAIL %-28s x%0d expected non-zero, got 0x%08x", message, r, found);
@@ -64,20 +62,21 @@ module instructions_tb ();
     endtask
 
     // Address helpers for data checks (we use x21 = 0x00002100 as base)
-    localparam int WORD_0 = 32'h00002100 >> 2; // 0x2100 / 4 = 0x840
-    localparam int WORD_4 = 32'h00002104 >> 2; // 0x841
-    localparam int WORD_8 = 32'h00002108 >> 2; // 0x842
+    //change the base addr to 0x00000000 for bram memory
+    localparam int WORD_0 = 32'h00000000 >> 2; // 0x2100 / 4 = 0x840
+    localparam int WORD_4 = 32'h00000004 >> 2; // 0x841
+    localparam int WORD_8 = 32'h00000008 >> 2; // 0x842
 
     initial begin
         $dumpfile("instructions_tb.vcd");
 
-        $dumpvars(0, soc_inst.processor_inst, soc_inst.memory_inst);
+        $dumpvars(0, processor_inst, processor_inst.bram_inst);
         // Give SOC a moment to load MEM_INIT
         repeat (10) @(posedge clock);
 
-        soc_inst.memory_inst.sram[WORD_0] = 32'h0000_0000;
-        soc_inst.memory_inst.sram[WORD_4] = 32'h0000_0000;
-        soc_inst.memory_inst.sram[WORD_8] = 32'h0000_0000;
+        processor_inst.bram_inst.memory[WORD_0] = 32'h123450b7;
+        processor_inst.bram_inst.memory[WORD_4] = 32'h02a00113;
+        processor_inst.bram_inst.memory[WORD_8] = 32'h03212193;
 
         // Apply reset
         @(negedge clock);
