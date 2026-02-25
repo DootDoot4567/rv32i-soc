@@ -71,6 +71,13 @@ module processor #(
     logic [31:0] storeWord;
     //logic [31:0] storeMask;
 
+    //Word loaded to register using combinatorial logic
+    logic [31:0] loadData;
+
+    //Helper variables to help compute loadData
+    logic [15:0] loadHalf;
+    logic [7:0] loadByte;
+
     //Computes minimum bits needed for the mem addresses using log_2(depth)
     localparam ADDR_WIDTH=$clog2(DEPTH);
 
@@ -171,32 +178,44 @@ module processor #(
     assign rs2 = registerFile[rs2Id];
 
     //Continously drive the target memory address (used by loads and stores)
-    assign memAddr = rs1 + (isLoad ? Iimm : Simm);
-
-    logic [31:0] loadData;
-    logic [31:0] loadHalf;
-
-    
+    assign memAddr = rs1 + (isLoad ? Iimm : Simm); 
     
     always @(*)
         begin
+            loadHalf = memAddr[1] ? dataOut[31:16] : dataOut[15:0];
 
-            loadData = {{24{byteData[7]}}, byteData};
             case(memAddr[1:0])
-                0: byteData = dataOut[7:0];
-                1: byteData = dataOut[15:8];
-                2: byteData = dataOut[23:16];
-                3: byteData = dataOut[31:24];
+                0: loadByte = dataOut[7:0];
+                1: loadByte = dataOut[15:8];
+                2: loadByte = dataOut[23:16];
+                3: loadByte = dataOut[31:24];
             endcase
 
+            case(funct3)
+                3'b000: loadData = {{24{loadByte[7]}}, loadByte};
+                3'b001: loadData = {{16{loadHalf[15]}}, loadHalf};
+                3'b100: loadData = {24'b0, loadByte};
+                3'b101: loadData = {16'b0, loadHalf};
+
+                default:
+                    loadData = dataOut;
+            
+            endcase
         end
-    // memAddr[1:0] == 0 ? dataOut[7:0] :
-    //                    memAddr[1:0] == 1 ? dataOut[15:8] :
-    //                    memAddr[1:0] == 2 ? dataOut[23:16] :
-    //                                         dataOut[31:24];
+   
+    // always @(*)
+    //     begin
+    //         case(funct3)
+    //             3'b000: loadData = {{24{loadByte[7]}}, loadByte};
+    //             3'b001: loadData = {{16{loadHalf[15]}}, loadHalf};
+    //             3'b100: loadData = {24'b0, loadByte};
+    //             3'b101: loadData = {16'b0, loadHalf};
 
-    // logic [31:0] loadData = {{24{byteData[7]}}, byteData};
-
+    //             default:
+    //                 loadData = dataOut;
+            
+    //         endcase
+    //     end
 
     //not working
     // always @(*)
@@ -256,8 +275,20 @@ module processor #(
                 end
         end
 
+    //Reset control
+    // always_ff @(posedge clock)
+    //     begin
+    //         if (reset)
+    //             begin
+    //                 initial 
+    //                     begin
+    //                         $readmemh("register_init.txt", registerFile);
+    //                     end
+                    
+    //             end
+    //     end
+
     //Finite State Machine
-    //Based on 
     always @(posedge clock) 
         begin
             case(state)
@@ -271,7 +302,6 @@ module processor #(
                     end
                 INITIAL:
                     begin
-                        //Set up signals for fetch state 
 
                         //Use the second bit because we increment by 4 for the pc. 
                         //the 2 bit corresponds to the start of our word addresses
@@ -330,9 +360,15 @@ module processor #(
                                     end
                             end
                         
-                        if (isStore || isLoad)
+                        // if (isStore || isLoad)
+                        //     begin
+                        //         readEnable <= 1;
+                        //     end
+
+                        if (isLoad) 
                             begin
                                 readEnable <= 1;
+                                addrRead <= memAddr[ADDR_WIDTH - 1:2];
                             end
                         
                         state <= MEMORY;	          
@@ -350,15 +386,6 @@ module processor #(
                                 writeEnable <= 1;
                             end
 
-                        if (!isLoad)
-                            begin
-                                writeBackData <= writeBackDataCandidate;
-                            end
-                        else
-                            begin
-                                writeBackData <= loadData;
-                            end
-
                         writeBackEnable <= (!isBranch && !isStore);
 
                         readEnable <= 0;
@@ -372,15 +399,16 @@ module processor #(
 
                         if(writeBackEnable && rdId !== 0) 
                             begin
-                                registerFile[rdId] <= writeBackData;
+                                registerFile[rdId] <= writeBackDataCandidate;
 
                                 `ifdef SIMULATION	 
                                           $display("x%0d <= %b",rdId,writeBackData);
                                 `endif
                             end
-
-                        if (isStore)
+                                                
+                        if (isLoad)
                             begin
+                                registerFile[rdId] <= loadData;
                                 addrRead <= pc[ADDR_WIDTH - 1:2];
                             end
 
