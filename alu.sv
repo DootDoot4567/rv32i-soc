@@ -93,6 +93,9 @@ module alu(
                 3'b101: takeBranch = !isLessthanSigned;
                 3'b110: takeBranch = isLessThanUnsigned;
                 3'b111: takeBranch = !isLessThanUnsigned;
+
+                default:
+                    takeBranch = 0;
             endcase
 
             //Alu logic 
