@@ -52,7 +52,7 @@ module decoder(
     //Modeled after the definitiion given by:
     //  Computer Organization and Design:
     //  The Hardware/Software Interface: RISC-V Edition
-    //  and BrunoLevy's FROM_BLINKER_TO_RISCV tutorial on GitHub 
+    //  and FemtoRV: FROM_BLINKER_TO_RISCV tutorial on GitHub 
 
     assign Uimm = { instr[31], instr[30:12], 12'b0 };
     assign Iimm = {{21{instr[31]}}, instr[30:20]};

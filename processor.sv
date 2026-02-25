@@ -1,5 +1,7 @@
 module processor #(
-    parameter INIT = ""
+    parameter INIT = "",
+    parameter WIDTH = 32,
+    parameter DEPTH = 16384
 ) (
     input logic clock,
     input logic reset
@@ -12,10 +14,10 @@ module processor #(
     // logic clockRead = 0;
     logic writeEnable = 0;
     logic readEnable = 0;
-    logic [6:0] addrRead = 0;
-    // logic [6:0] addrWrite = 0;
-    logic [31:0] dataOut;
-    logic [31:0] dataIn;
+    logic [ADDR_WIDTH - 1:0] addrRead = 0;
+    logic [ADDR_WIDTH - 1:0] addrWrite = 0;
+    logic [WIDTH - 1:0] dataOut;
+    logic [WIDTH - 1:0] dataIn;
 
     logic [31:0] instr;
 
@@ -40,31 +42,39 @@ module processor #(
     logic [2:0] funct3;
     logic [6:0] funct7;
 
+    //Immediate values for different types of instructions
     logic [31:0] Uimm;
     logic [31:0] Iimm;
     logic [31:0] Simm;
     logic [31:0] Bimm;
     logic [31:0] Jimm;
 
+    //Register fields from instruction decoding
     logic [31:0] rs1;
     logic [31:0] rs2;
 
-    logic [31:0] registerFile [0:31];
-
-    initial 
-        begin
-            $readmemh("register_init.txt", registerFile);
-        end
-
+    //Alu output 
     logic [31:0] aluOut;
+
+    //Writeback data and its states
     logic [31:0] writeBackData;
     logic writeBackEnable = 0;
 
+    //Computed writeback and pc values from alu 
     logic [31:0] nextPcCandidate;
     logic [31:0] writeBackDataCandidate;
 
+    //Computed memory address for loads and stores
     logic [31:0] memAddr;
 
+    //Word written to word addressed bram and the mask 
+    logic [31:0] storeWord;
+    //logic [31:0] storeMask;
+
+    //Computes minimum bits needed for the mem addresses using log_2(depth)
+    localparam ADDR_WIDTH=$clog2(DEPTH);
+
+    //FSM states
     localparam HALT = 3'b000;
     localparam INITIAL = 3'b001;
     localparam FETCH = 3'b010;
@@ -73,26 +83,37 @@ module processor #(
     localparam MEMORY = 3'b101;
     localparam WRITE_BACK = 3'b110;
 
+    //Initializing the state to start at HALT
     logic [3:0] state = HALT; 
+
+    //Declare and initialize the registerFile using a file of 32 lines of 32'b0
+    logic [31:0] registerFile [0:31];
+
+    initial 
+        begin
+            $readmemh("register_init.txt", registerFile);
+        end
 
     //Debugging signal
     logic isFetch = 0;
 
+    //Instatiate the bram (simple dual port)
     bram_sdp #(
-        .WIDTH(32), 
-        .DEPTH(73),
+        .WIDTH(WIDTH),
+        .DEPTH(DEPTH),
         .INIT(INIT)
     ) bram_inst (
         .clockWrite(clock),
         .clockRead(clock),
         .writeEnable,
         .readEnable,
-        .addrWrite(7'b0),
+        .addrWrite(addrWrite),
         .addrRead(addrRead),
-        .dataIn,
+        .dataIn(dataIn),
         .dataOut(dataOut)
     );
 
+    //Instantiate the decoder (purely combinatorial)
     decoder decoder_inst (
         .instr,
         .isALUreg,
@@ -117,6 +138,7 @@ module processor #(
         .Jimm
     );
 
+    //Instantiate the alu (purely combinatorial)
     alu alu_inst (
         .rs1,
         .rs2,
@@ -144,29 +166,98 @@ module processor #(
         .nextPcCandidate
     );
 
-    // assign memAddr = rs1 + (isLoad ? Iimm : Simm);
+    //Continously drive both registers from decoded idx 
+    assign rs1 = registerFile[rs1Id];
+    assign rs2 = registerFile[rs2Id];
 
-    // logic [7:0] byteData = memAddr[1:0] == 0 ? dataOut[7:0] :
+    //Continously drive the target memory address (used by loads and stores)
+    assign memAddr = rs1 + (isLoad ? Iimm : Simm);
+
+    logic [31:0] loadData;
+    logic [31:0] loadHalf;
+
+    
+    
+    always @(*)
+        begin
+
+            loadData = {{24{byteData[7]}}, byteData};
+            case(memAddr[1:0])
+                0: byteData = dataOut[7:0];
+                1: byteData = dataOut[15:8];
+                2: byteData = dataOut[23:16];
+                3: byteData = dataOut[31:24];
+            endcase
+
+        end
+    // memAddr[1:0] == 0 ? dataOut[7:0] :
     //                    memAddr[1:0] == 1 ? dataOut[15:8] :
     //                    memAddr[1:0] == 2 ? dataOut[23:16] :
     //                                         dataOut[31:24];
 
     // logic [31:0] loadData = {{24{byteData[7]}}, byteData};
-    // logic [31:0] storeWord = dataOut;
 
+
+    //not working
     // always @(*)
     //     begin
-    //         if (funct3 == 3'b000)
+    //         if (funct3 === 3'b000)
     //             begin
+    //                 storeWord[15:0] = {rs2[7:0], rs2[7:0], rs2[7:0], rs2[7:0]};
+
     //                 case(memAddr[1:0])
-    //                     0: storeWord[7:0]   = rs2[7:0];
-    //                     1: storeWord[15:8]  = rs2[7:0];
-    //                     2: storeWord[23:16] = rs2[7:0];
-    //                     3: storeWord[31:24] = rs2[7:0];
+    //                     0: storeMask = {24'b0, 8'b1};
+    //                     1: storeMask = {16'b0, 8'b1, 8'b0};
+    //                     2: storeMask = {8'b0, 8'b1, 16'b0};
+    //                     3: storeMask = {8'b1, 24'b0};
     //                 endcase
+    //             end
+
+    //         if (funct3 === 3'b001)
+    //             begin
+    //                 storeWord[15:0] = {rs2[15:0], rs2[15:0]};
+
+    //                 case(memAddr[1])
+    //                     0: storeMask = {16'b0, 16'b1};
+    //                     1: storeMask = {16'b1, 16'b0};
+    //                 endcase
+    //             end
+
+    //         if (funct3 === 3'b010)
+    //             begin
+    //                 storeWord = rs2;
+    //                 storeMask {32'b0}
     //             end
     //     end
 
+    always @(*)
+        begin
+            if (funct3 == 3'b000)
+                begin
+                    case(memAddr[1:0])
+                        0: storeWord[7:0]   = rs2[7:0];
+                        1: storeWord[15:8]  = rs2[7:0];
+                        2: storeWord[23:16] = rs2[7:0];
+                        3: storeWord[31:24] = rs2[7:0];
+                    endcase
+                end
+            
+            else if (funct3 == 3'b001)
+                begin
+                    case(memAddr[1:0])
+                        0: storeWord[15:0]   = rs2[15:0];
+                        3: storeWord[31:16] = rs2[15:0];
+                    endcase
+                end
+
+            else if (funct3 == 3'b010)
+                begin
+                    storeWord = rs2;
+                end
+        end
+
+    //Finite State Machine
+    //Based on 
     always @(posedge clock) 
         begin
             case(state)
@@ -180,14 +271,19 @@ module processor #(
                     end
                 INITIAL:
                     begin
-
                         //Set up signals for fetch state 
 
+                        //Use the second bit because we increment by 4 for the pc. 
+                        //the 2 bit corresponds to the start of our word addresses
+
+                        addrRead <= pc[ADDR_WIDTH - 1:2];
+
+                        //Schdule readEnable and isFetch to go up and
+                        //writeBackEnable to go down at posedge of next
+                        //clock cycle
                         readEnable <= 1;
-                        //we use the second bit because we increment by 4 for the pc. the 2 bit corresponds to the first line in our .mem file
-                        addrRead <= pc[8:2];
-                        writeBackEnable <= 0;
                         isFetch <= 1;
+                        writeBackEnable <= 0;
 
                         state <= FETCH;
                     end
@@ -195,11 +291,13 @@ module processor #(
                     begin
                         $display("FETCH");
 
-                        //Schedule readEnable to go down instant of next clock cycle
+                        //Schedule readEnable to go down at posedge of next clock cycle
                         readEnable <= 0;
 
-                        addrRead <= nextPcCandidate[8:2];
+                        //Read from PC + imm (computed by alu)
+                        addrRead <= nextPcCandidate[ADDR_WIDTH - 1:2];
 
+                        //Schedule isFetch debug signal to down at posedge of next clock cycle
                         isFetch <= 0;
 
                         state <= DECODE;
@@ -210,7 +308,6 @@ module processor #(
 
                         //calculate branch and jump targets here
                         instr <= dataOut; 
-                        //instr <= 32'h123450b7;
 
                         state <= EXECUTE;
                     end
@@ -220,9 +317,6 @@ module processor #(
                         //if its branch or jump then update pc 
 
                         //if load or a store, then read or write enable goes up so that its ready for mem state
-
-                        rs1 <= registerFile[rs1Id];
-                        rs2 <= registerFile[rs2Id];
 
                         if (!isSYSTEM)
                             begin
@@ -235,8 +329,11 @@ module processor #(
                                         pc <= nextPcCandidate;
                                     end
                             end
-
-                        writeEnable <= 1;
+                        
+                        if (isStore || isLoad)
+                            begin
+                                readEnable <= 1;
+                            end
                         
                         state <= MEMORY;	          
                     end
@@ -246,17 +343,25 @@ module processor #(
                         //schedule so that read and write enable to go down
                         //writes to mem
 
-                        if(isLoad) 
+                        if(isStore) 
                             begin
-                                
+                                addrWrite <= memAddr[ADDR_WIDTH - 1:2];
+                                dataIn <= storeWord;
+                                writeEnable <= 1;
                             end
 
-                        writeBackData <= writeBackDataCandidate;
+                        if (!isLoad)
+                            begin
+                                writeBackData <= writeBackDataCandidate;
+                            end
+                        else
+                            begin
+                                writeBackData <= loadData;
+                            end
 
-                        writeBackEnable <= (!isBranch && !isStore && !isLoad);
+                        writeBackEnable <= (!isBranch && !isStore);
 
                         readEnable <= 0;
-                        writeEnable <= 0;
 
                         state <= WRITE_BACK;
                     end
@@ -265,7 +370,7 @@ module processor #(
                         $display("WB");
                         //writes to register file
 
-                        if(writeBackEnable && rdId != 0) 
+                        if(writeBackEnable && rdId !== 0) 
                             begin
                                 registerFile[rdId] <= writeBackData;
 
@@ -274,8 +379,14 @@ module processor #(
                                 `endif
                             end
 
+                        if (isStore)
+                            begin
+                                addrRead <= pc[ADDR_WIDTH - 1:2];
+                            end
+
                         writeBackEnable <= 0;
                         readEnable <= 1;
+                        writeEnable <= 0;
 
                         isFetch <= 1;
                         state <= FETCH;

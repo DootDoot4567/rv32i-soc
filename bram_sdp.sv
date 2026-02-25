@@ -5,8 +5,8 @@
 // with modifications and cleanup
 
 module bram_sdp #(
-    parameter WIDTH=8, 
-    parameter DEPTH=256, 
+    parameter WIDTH=32, 
+    parameter DEPTH=4096, 
     parameter INIT=""
     ) (
     input logic clockWrite,
@@ -31,12 +31,20 @@ module bram_sdp #(
     end
 
     // Port A: Sync Write
-    always_ff @(posedge clockWrite) begin
-        if (writeEnable) memory[addrWrite] <= dataIn;
-    end
-
+    always_ff @(posedge clockWrite) 
+        begin
+            if (writeEnable)
+                begin
+                    memory[addrWrite] <= dataIn;
+                end
+        end
+        
     // Port B: Sync Read
-    always_ff @(posedge clockRead) begin
-        if (readEnable) dataOut <= memory[addrRead];
-    end
+    always_ff @(posedge clockRead) 
+        begin
+            if (readEnable) 
+                begin
+                    dataOut <= memory[addrRead];
+                end
+        end
 endmodule
