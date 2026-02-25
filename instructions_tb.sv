@@ -62,10 +62,10 @@ module instructions_tb ();
     endtask
 
     // Address helpers for data checks (we use x21 = 0x00002100 as base)
-    //change the base addr to 0x00000000 for bram memory
-    localparam int WORD_0 = 32'h00000000 >> 2; // 0x2100 / 4 = 0x840
-    localparam int WORD_4 = 32'h00000004 >> 2; // 0x841
-    localparam int WORD_8 = 32'h00000008 >> 2; // 0x842
+
+    localparam int WORD_0 = 32'h00002100 >> 2; // 0x2100 / 4 = 0x840
+    localparam int WORD_4 = 32'h00002104 >> 2; // 0x841
+    localparam int WORD_8 = 32'h00002108 >> 2; // 0x842
 
     initial begin
         $dumpfile("instructions_tb.vcd");
