@@ -62,7 +62,7 @@ module alu(
 
     //Drive both inputs for the ALU and ALU operations
     assign aluIn1 = rs1;
-    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
+    assign aluIn2 = (isALUreg || isBranch || isJALR) ? rs2 : Iimm;
 
     assign aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
     assign aluPlus = aluIn1 + aluIn2;
@@ -76,9 +76,9 @@ module alu(
 
     assign leftShift = flip32(shifter);
 
-    assign pcPlusImm = pc + ( instr[3] ? Jimm[31:0] :
-                                    instr[4] ? Uimm[31:0] :
-                                    Bimm[31:0] );
+    assign pcPlusImm = pc + (isJAL ? Jimm[31:0] :
+                             isAUIPC ? Uimm[31:0] :
+                             Bimm[31:0]);
         
     assign pcPlus4 = pc + 4;
  
@@ -111,8 +111,8 @@ module alu(
             endcase
            
            //Computed values for the writeback and the next program counter
-            writeBackDataCandidate = aluOut;
 
+            //Calculate writeback for JAL, JALR, LUI AND AUIPC
             if (isJAL || isJALR) 
                 begin
                     writeBackDataCandidate = pcPlus4;
@@ -125,16 +125,24 @@ module alu(
                 begin 
                     writeBackDataCandidate = pcPlusImm;
                 end
+            else
+                begin
+                    writeBackDataCandidate = aluOut;
+                end
 
-            nextPcCandidate = pcPlus4;
-            
+            //Calculate Branch, JAL or JALR targets here    
             if ((isBranch && takeBranch) || isJAL)
                 begin
                     nextPcCandidate = pcPlusImm;
                 end
             else if (isJALR)
                 begin
-                    nextPcCandidate = {aluPlus[31:1],1'b0};
+                    //nextPcCandidate = (aluIn1 + Iimm) & ~32'd1; 
+                    nextPcCandidate = {aluPlus[31:1], 1'b0};
+                end
+            else
+                begin
+                    nextPcCandidate = pcPlus4;
                 end
         end
 endmodule
