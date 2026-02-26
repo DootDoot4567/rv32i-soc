@@ -62,7 +62,7 @@ module alu(
 
     //Drive both inputs for the ALU and ALU operations
     assign aluIn1 = rs1;
-    assign aluIn2 = (isALUreg || isBranch || isJALR) ? rs2 : Iimm;
+    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
 
     assign aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
     assign aluPlus = aluIn1 + aluIn2;
