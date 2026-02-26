@@ -7,6 +7,7 @@ module processor #(
     input logic reset
 );
     logic [31:0] pc = 0;
+    logic [31:0] pcCurrent = 0;
 
     //BRAM inputs and outputs being declared as logic
 
@@ -57,7 +58,7 @@ module processor #(
     logic [31:0] aluOut;
 
     //Writeback data and its states
-    logic [31:0] writeBackData;
+    //logic [31:0] writeBackData;
     logic writeBackEnable = 0;
 
     //Computed writeback and pc values from alu 
@@ -90,8 +91,8 @@ module processor #(
     localparam MEMORY = 3'b101;
     localparam WRITE_BACK = 3'b110;
 
-    //Initializing the state to start at HALT
-    logic [3:0] state = HALT; 
+    //Declaring the state to start at INITIAL when there is a reset signal
+    logic [2:0] state; 
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
@@ -149,7 +150,7 @@ module processor #(
     alu alu_inst (
         .rs1,
         .rs2,
-        .pc,
+        .pc(pcCurrent),
         .instr,
         .isALUreg,
         .isALUimm,
@@ -276,17 +277,41 @@ module processor #(
         end
 
     //Reset control
-    // always_ff @(posedge clock)
-    //     begin
-    //         if (reset)
-    //             begin
-    //                 initial 
-    //                     begin
-    //                         $readmemh("register_init.txt", registerFile);
-    //                     end
-                    
-    //             end
-    //     end
+    always_ff @(posedge clock)
+        begin
+            if (reset)
+                begin
+                    registerFile[0] <= 32'd0;   registerFile[1] <= 32'd0;  
+                    registerFile[2] <= 32'd0;   registerFile[3] <= 32'd0;
+                    registerFile[4] <= 32'd0;   registerFile[5] <= 32'd0;  
+                    registerFile[6] <= 32'd0;   registerFile[7] <= 32'd0;
+                    registerFile[8] <= 32'd0;   registerFile[9] <= 32'd0;  
+                    registerFile[10] <= 32'd0;  registerFile[11] <= 32'd0;
+                    registerFile[12] <= 32'd0;  registerFile[13] <= 32'd0; 
+                    registerFile[14] <= 32'd0;  registerFile[15] <= 32'd0;
+                    registerFile[16] <= 32'd0;  registerFile[17] <= 32'd0; 
+                    registerFile[18] <= 32'd0;  registerFile[19] <= 32'd0;
+                    registerFile[20] <= 32'd0;  registerFile[21] <= 32'd0; 
+                    registerFile[22] <= 32'd0;  registerFile[23] <= 32'd0;
+                    registerFile[24] <= 32'd0;  registerFile[25] <= 32'd0; 
+                    registerFile[26] <= 32'd0;  registerFile[27] <= 32'd0;
+                    registerFile[28] <= 32'd0;  registerFile[29] <= 32'd0; 
+                    registerFile[30] <= 32'd0;  registerFile[31] <= 32'd0;
+
+                    pc <= 0;
+                    addrRead <= 0;
+                    readEnable <= 1;  
+
+                    writeEnable <= 0;  
+                    addrWrite <= 0;
+                    dataIn <= 0; 
+
+                    writeBackEnable <= 0;
+                    //writeBackData <= 0;
+
+                    state <= INITIAL;
+                end
+        end
 
     //Finite State Machine
     always @(posedge clock) 
@@ -294,11 +319,7 @@ module processor #(
             case(state)
                 HALT: 
                     begin
-                        if (reset) 
-                            begin
-                                pc <= 0;
-                                state <= INITIAL;
-                            end
+                        state <= HALT;
                     end
                 INITIAL:
                     begin
@@ -306,14 +327,14 @@ module processor #(
                         //Use the second bit because we increment by 4 for the pc. 
                         //the 2 bit corresponds to the start of our word addresses
 
-                        addrRead <= pc[ADDR_WIDTH - 1:2];
+                        //addrRead <= pc[ADDR_WIDTH - 1:2];
 
                         //Schdule readEnable and isFetch to go up and
                         //writeBackEnable to go down at posedge of next
                         //clock cycle
-                        readEnable <= 1;
-                        isFetch <= 1;
-                        writeBackEnable <= 0;
+                        //readEnable <= 1;
+                        //isFetch <= 1;
+                        //writeBackEnable <= 0;
 
                         state <= FETCH;
                     end
@@ -324,8 +345,10 @@ module processor #(
                         //Schedule readEnable to go down at posedge of next clock cycle
                         readEnable <= 0;
 
-                        //Read from PC + imm (computed by alu)
-                        addrRead <= nextPcCandidate[ADDR_WIDTH - 1:2];
+                        //Read from current pc
+                        //addrRead <= nextPcCandidate[ADDR_WIDTH - 1:2];
+                        //addrRead <= pc[ADDR_WIDTH - 1:2];
+                        //readEnable <= 1;
 
                         //Schedule isFetch debug signal to down at posedge of next clock cycle
                         isFetch <= 0;
@@ -338,6 +361,9 @@ module processor #(
 
                         //calculate branch and jump targets here
                         instr <= dataOut; 
+                        pcCurrent <= pc;
+
+                        readEnable <= 0;
 
                         state <= EXECUTE;
                     end
@@ -400,20 +426,17 @@ module processor #(
                         if(writeBackEnable && rdId !== 0) 
                             begin
                                 registerFile[rdId] <= writeBackDataCandidate;
-
-                                `ifdef SIMULATION	 
-                                          $display("x%0d <= %b",rdId,writeBackData);
-                                `endif
                             end
                                                 
                         if (isLoad)
                             begin
                                 registerFile[rdId] <= loadData;
-                                addrRead <= pc[ADDR_WIDTH - 1:2];
                             end
 
-                        writeBackEnable <= 0;
+                        addrRead <= pc[ADDR_WIDTH - 1:2];
                         readEnable <= 1;
+
+                        writeBackEnable <= 0;
                         writeEnable <= 0;
 
                         isFetch <= 1;
