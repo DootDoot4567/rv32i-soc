@@ -68,15 +68,11 @@ module processor #(
     logic [31:0] memAddr;
 
     //Word written to word addressed bram and the mask 
-    logic [31:0] storeWord;
+    logic [31:0] storeData;
     //logic [31:0] storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] loadData;
-
-    //Helper variables to help compute loadData
-    logic [15:0] loadHalf;
-    logic [7:0] loadByte;
 
     //Computes minimum bits needed for the mem addresses using log_2(depth)
     localparam ADDR_WIDTH=$clog2(DEPTH);
@@ -102,7 +98,7 @@ module processor #(
 
     initial 
         begin
-            $readmemh("register_init.txt", registerFile);
+            $readmemh("register_init.mem", registerFile);
         end
 
     //Instatiate the BRAM (simple dual port)
@@ -174,63 +170,24 @@ module processor #(
         .nextPcCandidate
     );
 
-    //Continously drive both registers from decoded idx 
-    assign rs1 = registerFile[rs1Id];
-    assign rs2 = registerFile[rs2Id];
+    //Instantiate the lsu (purely combinatorial)
+    lsu #(
+        .WIDTH(WIDTH)
+    ) lsu_inst (
+        .memAddr,
+        .rs2,
+        .dataOut,
+        .funct3,
+        .storeData,
+        .loadData
+    );
 
     //Continously drive the target memory address (used by loads and stores)
     assign memAddr = rs1 + (isLoad ? Iimm : Simm); 
-    
-    //Load logic for half and full words and bytes
-    always @(*)
-        begin
-            loadHalf = memAddr[1] ? dataOut[31:16] : dataOut[15:0];
 
-            case(memAddr[1:0])
-                0: loadByte = dataOut[7:0];
-                1: loadByte = dataOut[15:8];
-                2: loadByte = dataOut[23:16];
-                3: loadByte = dataOut[31:24];
-            endcase
-
-            case(funct3)
-                3'b000: loadData = {{24{loadByte[7]}}, loadByte};
-                3'b001: loadData = {{16{loadHalf[15]}}, loadHalf};
-                3'b100: loadData = {24'b0, loadByte};
-                3'b101: loadData = {16'b0, loadHalf};
-
-                default:
-                    loadData = dataOut;
-            
-            endcase
-        end
-
-    //Store logic, combinatorially builds the word stored
-    always @(*)
-        begin
-            if (funct3 == 3'b000)
-                begin
-                    case(memAddr[1:0])
-                        0: storeWord[7:0]   = rs2[7:0];
-                        1: storeWord[15:8]  = rs2[7:0];
-                        2: storeWord[23:16] = rs2[7:0];
-                        3: storeWord[31:24] = rs2[7:0];
-                    endcase
-                end
-            
-            else if (funct3 == 3'b001)
-                begin
-                    case(memAddr[1:0])
-                        0: storeWord[15:0]   = rs2[15:0];
-                        3: storeWord[31:16] = rs2[15:0];
-                    endcase
-                end
-
-            else if (funct3 == 3'b010)
-                begin
-                    storeWord = rs2;
-                end
-        end
+    //Continously drive both registers from decoded idx 
+    assign rs1 = registerFile[rs1Id];
+    assign rs2 = registerFile[rs2Id];
 
     //Reset control
     always_ff @(posedge clock)
@@ -300,6 +257,7 @@ module processor #(
                 EXECUTE: 
                     begin
                         //Schedule PC to get combinatorially computed PC from ALU
+ 
                         if (!isSYSTEM)
                             begin
                                 if (pc === 288)
@@ -328,7 +286,7 @@ module processor #(
                         if(isStore) 
                             begin
                                 addrWrite <= memAddr[ADDR_WIDTH - 1:2];
-                                dataIn <= storeWord;
+                                dataIn <= storeData;
                                 writeEnable <= 1;
                             end
 
@@ -356,6 +314,7 @@ module processor #(
                         addrRead <= pc[ADDR_WIDTH - 1:2];
                         readEnable <= 1;
 
+                        //Stop any writes at next clock
                         writeBackEnable <= 0;
                         writeEnable <= 0;
 
