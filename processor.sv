@@ -335,12 +335,6 @@ module processor #(
                                 addrRead <= memAddr[ADDR_WIDTH - 1:2];
                             end
 
-                        
-                        
-                        state <= MEMORY;	          
-                    end
-                MEMORY:
-                    begin
                         //Schedule a memory write at computed target address, memAddr
                         if(isStore) 
                             begin
@@ -348,10 +342,24 @@ module processor #(
                                 dataIn <= storeData;
                                 writeEnable <= 1;
                             end
-
-                        //Schedule writeBackEnable and not a read
+                        
+                        state <= MEMORY;	          
+                    end
+                MEMORY:
+                    begin
+                        //Schedule a writeback by driving writeBackEnable for one cycle
                         writeBackEnable <= (!isBranch && !isStore);
-                        readEnable <= 0;
+
+                        //Stop reading or writing at the WB state
+                        if (isLoad)
+                            begin
+                                readEnable <= 0;
+                            end
+
+                        if (isStore)
+                            begin
+                                writeEnable <= 0;
+                            end
 
                         state <= WRITE_BACK;
                     end
@@ -373,9 +381,8 @@ module processor #(
                         addrRead <= pc[ADDR_WIDTH - 1:2];
                         readEnable <= 1;
 
-                        //Stop any writes at next clock
+                        //Stop writeback at next clock cycle
                         writeBackEnable <= 0;
-                        writeEnable <= 0;
 
                         state <= FETCH;
                     end
