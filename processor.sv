@@ -6,8 +6,21 @@ module processor #(
     input logic clock,
     input logic reset
 );
+    //Program counter and different wires to drive different pc
+    //values at different states
     logic [31:0] pc = 0;
-    logic [31:0] pcCurrent = 0;
+    //logic [31:0] pcCurrent = 0;
+    logic [31:0] pcPlus4;
+    logic [31:0] pcPlusImm;
+    logic [31:0] pcJALR;
+
+    //Flag to decide to branch or not
+    logic takeBranch;
+
+    //Flags that compute comparison (done in alu)
+    output logic isEQ;
+    output logic isLTU;
+    output logic isLT;
 
     //BRAM inputs and outputs being declared as logic
 
@@ -21,6 +34,7 @@ module processor #(
     logic [WIDTH - 1:0] dataIn;
 
     logic [31:0] instr;
+    logic [31:0] fetchedInstruction;
 
     //Boolean flags used by the decoder, processor, and alu
     logic isALUreg;
@@ -59,10 +73,7 @@ module processor #(
 
     //Writeback data and its states
     logic writeBackEnable = 0;
-
-    //Computed writeback and pc values from alu 
-    logic [31:0] nextPcCandidate;
-    logic [31:0] writeBackDataCandidate;
+    logic [31:0] writeBackData;
 
     //Computed memory address for loads and stores
     logic [31:0] memAddr;
@@ -146,7 +157,6 @@ module processor #(
     alu alu_inst (
         .rs1,
         .rs2,
-        .pc(pcCurrent),
         .instr,
         .isALUreg,
         .isALUimm,
@@ -165,9 +175,11 @@ module processor #(
         .Jimm,
         .funct3,
         .funct7,
+        .pcJALR,
         .aluOut,
-        .writeBackDataCandidate,
-        .nextPcCandidate
+        .isEQ,
+        .isLTU,
+        .isLT
     );
 
     //Instantiate the lsu (purely combinatorial)
@@ -188,6 +200,28 @@ module processor #(
     //Continously drive both registers from decoded idx 
     assign rs1 = registerFile[rs1Id];
     assign rs2 = registerFile[rs2Id];
+
+    //Continously drive the instruction fetched
+    assign instr = (state === DECODE) ? dataOut : fetchedInstruction;
+
+    //Continously drive the value of the pc for next instruction
+    assign pcPlus4 = pc + 4;
+
+    always @(*)
+        begin
+            //Branch decision logic 
+            case(funct3)
+                3'b000: takeBranch = isEQ;
+                3'b001: takeBranch = !isEQ;
+                3'b100: takeBranch = isLT;
+                3'b101: takeBranch = !isLT;
+                3'b110: takeBranch = isLTU;
+                3'b111: takeBranch = !isLTU;
+
+                default:
+                    takeBranch = 0;
+            endcase
+        end
 
     //Reset control
     always_ff @(posedge clock)
@@ -247,28 +281,51 @@ module processor #(
                 DECODE: 
                     begin
                         //Get instruction from BRAM module here
-                        instr <= dataOut; 
 
-                        //Latch the current pc to keep track of current instruction
-                        pcCurrent <= pc;
+                        fetchedInstruction <= dataOut;
+
+                        //Calculate Branch, JAL and AUIPC targets here
+                        //PC value + immediate based on isTYPE flags
+                        pcPlusImm <= pc + (isJAL ? Jimm[31:0] :
+                                     isAUIPC ? Uimm[31:0] :
+                                     Bimm[31:0]);
 
                         state <= EXECUTE;
                     end
                 EXECUTE: 
                     begin
-                        //Schedule PC to get combinatorially computed PC from ALU
- 
+                        //Compute values for the writeback and the next program counter
                         if (!isSYSTEM)
                             begin
-                                if (pc === 288)
+                                if ((isBranch && takeBranch) || isJAL)
                                     begin
-                                        //Make PC wrap when at instr depth of instructions.mem
-                                        pc <= 0;
+                                        pc <= pcPlusImm;
+                                    end
+                                else if (isJALR)
+                                    begin
+                                        pc <= pcJALR;
                                     end
                                 else
                                     begin
-                                        pc <= nextPcCandidate;
+                                        pc <= pcPlus4;
                                     end
+                            end
+
+                        if (isJAL || isJALR) 
+                            begin
+                                writeBackData <= pcPlus4;
+                            end
+                        else if (isLUI)
+                            begin
+                                writeBackData <= Uimm;
+                            end
+                        else if (isAUIPC)
+                            begin 
+                                writeBackData <= pcPlusImm;
+                            end
+                        else
+                            begin
+                                writeBackData <= aluOut;
                             end
                         
                         //If instruction is load, schedule a read for bram using caculated memAddr
@@ -277,6 +334,8 @@ module processor #(
                                 readEnable <= 1;
                                 addrRead <= memAddr[ADDR_WIDTH - 1:2];
                             end
+
+                        
                         
                         state <= MEMORY;	          
                     end
@@ -301,7 +360,7 @@ module processor #(
                         //Write to register file
                         if(writeBackEnable && rdId !== 0) 
                             begin
-                                registerFile[rdId] <= writeBackDataCandidate;
+                                registerFile[rdId] <= writeBackData;
                             end
 
                         //Write to register with loaded word     
@@ -323,25 +382,25 @@ module processor #(
             endcase
         end
 
-    `ifdef SIMULATION
-        always @(posedge clock) 
-            begin
-                $display("PC=%0d instr=%h", pc, instr);
-                $display("Instruction opcode %b", dataOut[6:0]);
+    // `ifdef SIMULATION
+    //     always @(posedge clock) 
+    //         begin
+    //             $display("PC=%0d instr=%h", pc, instr);
+    //             $display("Instruction opcode %b", dataOut[6:0]);
                 
-                case (1'b1)
-                    isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
-                    isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
-                    isLoad:   $display("LOAD");
-                    isStore:  $display("STORE");
-                    isBranch: $display("BRANCH");
-                    isJAL:    $display("JAL");
-                    isJALR:   $display("JALR");
-                    isLUI:    $display("LUI");
-                    isAUIPC:  $display("AUIPC");
-                    isSYSTEM: $display("SYSTEM (EBREAK)");
-                endcase
-            end
-    `endif
+    //             case (1'b1)
+    //                 isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
+    //                 isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
+    //                 isLoad:   $display("LOAD");
+    //                 isStore:  $display("STORE");
+    //                 isBranch: $display("BRANCH");
+    //                 isJAL:    $display("JAL");
+    //                 isJALR:   $display("JALR");
+    //                 isLUI:    $display("LUI");
+    //                 isAUIPC:  $display("AUIPC");
+    //                 isSYSTEM: $display("SYSTEM (EBREAK)");
+    //             endcase
+    //         end
+    // `endif
 
 endmodule
