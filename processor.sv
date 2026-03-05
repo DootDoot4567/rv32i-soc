@@ -9,7 +9,6 @@ module processor #(
     //Program counter and different wires to drive different pc
     //values at different states
     logic [31:0] pc = 0;
-    //logic [31:0] pcCurrent = 0;
     logic [31:0] pcPlus4;
     logic [31:0] pcPlusImm;
     logic [31:0] pcJALR;
@@ -93,16 +92,18 @@ module processor #(
     //the 2 bit corresponds to the start of our word addresses
 
     //FSM states
-    localparam HALT = 3'b000;
-    localparam INITIAL = 3'b001;
-    localparam FETCH = 3'b010;
-    localparam DECODE = 3'b011;
-    localparam EXECUTE = 3'b100;
-    localparam MEMORY = 3'b101;
-    localparam WRITE_BACK = 3'b110;
+    typedef enum {
+        HALT,
+        INITIAL,
+        FETCH,
+        DECODE,
+        EXECUTE,
+        MEMORY,
+        WRITE_BACK
+    } state_t;
 
     //Declaring the state to start at INITIAL when there is a reset signal
-    logic [2:0] state; 
+    state_t state; 
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
