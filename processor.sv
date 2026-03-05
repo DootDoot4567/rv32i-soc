@@ -111,6 +111,8 @@ module processor #(
         begin
             $readmemh("register_init.mem", registerFile);
         end
+    
+    integer i;
 
     //Instatiate the BRAM (simple dual port)
     bram_sdp #(
@@ -228,22 +230,10 @@ module processor #(
         begin
             if (reset)
                 begin
-                    registerFile[0] <= 32'd0;   registerFile[1] <= 32'd0;  
-                    registerFile[2] <= 32'd0;   registerFile[3] <= 32'd0;
-                    registerFile[4] <= 32'd0;   registerFile[5] <= 32'd0;  
-                    registerFile[6] <= 32'd0;   registerFile[7] <= 32'd0;
-                    registerFile[8] <= 32'd0;   registerFile[9] <= 32'd0;  
-                    registerFile[10] <= 32'd0;  registerFile[11] <= 32'd0;
-                    registerFile[12] <= 32'd0;  registerFile[13] <= 32'd0; 
-                    registerFile[14] <= 32'd0;  registerFile[15] <= 32'd0;
-                    registerFile[16] <= 32'd0;  registerFile[17] <= 32'd0; 
-                    registerFile[18] <= 32'd0;  registerFile[19] <= 32'd0;
-                    registerFile[20] <= 32'd0;  registerFile[21] <= 32'd0; 
-                    registerFile[22] <= 32'd0;  registerFile[23] <= 32'd0;
-                    registerFile[24] <= 32'd0;  registerFile[25] <= 32'd0; 
-                    registerFile[26] <= 32'd0;  registerFile[27] <= 32'd0;
-                    registerFile[28] <= 32'd0;  registerFile[29] <= 32'd0; 
-                    registerFile[30] <= 32'd0;  registerFile[31] <= 32'd0;
+                    for (i = 0; i < 32; i = i + 1)
+                        begin
+                            registerFile[i] <= 32'd0;
+                        end
 
                     pc <= 0;
                     addrRead <= 0;
