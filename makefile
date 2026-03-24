@@ -9,7 +9,7 @@ PCF_FILE	?= Go_Board_Constraints.pcf
 
 TOP			?= soc
 TOP_TB		?= instructions_tb
-MODULES		?= processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv
+MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv
 MODULES_TB	?= instructions_tb.sv
 
 # Use yosys to perform synthesis
