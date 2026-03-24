@@ -3,8 +3,14 @@ module processor #(
     parameter WIDTH = 32,
     parameter DEPTH = 16384
 ) (
-    input logic clock,
-    input logic reset
+    input logic clockWrite = 0,
+    input logic clockRead = 0,
+    input logic writeEnable = 0,
+    input logic readEnable = 0,
+    input logic [ADDR_WIDTH - 1:0] addrRead = 0,
+    input logic [ADDR_WIDTH - 1:0] addrWrite = 0,
+    input logic [WIDTH - 1:0] dataOut,
+    input logic [WIDTH - 1:0] dataIn
 );
     //Program counter and different wires to drive different pc
     //values at different states
@@ -20,17 +26,6 @@ module processor #(
     output logic isEQ;
     output logic isLTU;
     output logic isLT;
-
-    //BRAM inputs and outputs being declared as logic
-
-    // logic clockWrite = 0;
-    // logic clockRead = 0;
-    logic writeEnable = 0;
-    logic readEnable = 0;
-    logic [ADDR_WIDTH - 1:0] addrRead = 0;
-    logic [ADDR_WIDTH - 1:0] addrWrite = 0;
-    logic [WIDTH - 1:0] dataOut;
-    logic [WIDTH - 1:0] dataIn;
 
     logic [31:0] instr;
     logic [31:0] fetchedInstruction;
@@ -114,22 +109,6 @@ module processor #(
         end
     
     integer i;
-
-    //Instatiate the BRAM (simple dual port)
-    bram_sdp #(
-        .WIDTH(WIDTH),
-        .DEPTH(DEPTH),
-        .INIT(INIT)
-    ) bram_inst (
-        .clockWrite(clock),
-        .clockRead(clock),
-        .writeEnable,
-        .readEnable,
-        .addrWrite(addrWrite),
-        .addrRead(addrRead),
-        .dataIn(dataIn),
-        .dataOut(dataOut)
-    );
 
     //Instantiate the decoder (purely combinatorial)
     decoder decoder_inst (
