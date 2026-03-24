@@ -5,10 +5,11 @@
 // with modifications and cleanup
 
 module bram_sdp #(
-    parameter WIDTH=32, 
-    parameter DEPTH=4096, 
-    parameter INIT=""
-    ) (
+    parameter WIDTH = 32, 
+    parameter DEPTH = 4096, 
+    parameter ADDR_WIDTH = 12,
+    parameter INIT = ""
+) (
     input logic clockWrite,
     input logic clockRead,
     input logic writeEnable,
@@ -18,8 +19,6 @@ module bram_sdp #(
     input logic [WIDTH-1:0] dataIn,
     output logic [WIDTH-1:0] dataOut
 );
-
-    localparam ADDR_WIDTH=$clog2(DEPTH);
 
     logic [WIDTH-1:0] memory [DEPTH];
 
