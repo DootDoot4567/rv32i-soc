@@ -1,16 +1,18 @@
 module processor #(
     parameter INIT = "",
     parameter WIDTH = 32,
-    parameter DEPTH = 16384
+    parameter DEPTH = 16384,
+    parameter ADDR_WIDTH = 14
 ) (
-    input logic clockWrite = 0,
-    input logic clockRead = 0,
-    input logic writeEnable = 0,
-    input logic readEnable = 0,
-    input logic [ADDR_WIDTH - 1:0] addrRead = 0,
-    input logic [ADDR_WIDTH - 1:0] addrWrite = 0,
+    input logic clock,
+    input logic reset,
     input logic [WIDTH - 1:0] dataOut,
-    input logic [WIDTH - 1:0] dataIn
+
+    output logic writeEnable,
+    output logic readEnable,
+    output logic [ADDR_WIDTH - 1:0] addrRead,
+    output logic [ADDR_WIDTH - 1:0] addrWrite,
+    output logic [WIDTH - 1:0] dataIn
 );
     //Program counter and different wires to drive different pc
     //values at different states
@@ -78,9 +80,6 @@ module processor #(
 
     //Word loaded to register using combinatorial logic
     logic [31:0] loadData;
-
-    //Computes minimum bits needed for the mem addresses using log_2(depth)
-    localparam ADDR_WIDTH=$clog2(DEPTH);
 
     //PC and memAddr will be indexed by [ADDR_WIDTH - 1:2]
     //We use the second bit because we increment by 4 for the pc. 
@@ -227,136 +226,134 @@ module processor #(
 
                     state <= INITIAL;
                 end
-        end
-
-    //Finite State Machine
-    always @(posedge clock) 
-        begin
-            case(state)
-                HALT: 
-                    begin
-                        state <= HALT;
-                    end
-                INITIAL:
-                    begin
-                        state <= FETCH;
-                    end
-                FETCH:
-                    begin
-                        //Schedule readEnable to go down at posedge of next clock cycle
-                        readEnable <= 0;
-
-                        state <= DECODE;
-                    end
-                DECODE: 
-                    begin
-                        //Get instruction from BRAM module here
-
-                        fetchedInstruction <= dataOut;
-
-                        //Calculate Branch, JAL and AUIPC targets here
-                        //PC value + immediate based on isTYPE flags
-                        pcPlusImm <= pc + (isJAL ? Jimm[31:0] :
-                                     isAUIPC ? Uimm[31:0] :
-                                     Bimm[31:0]);
-
-                        state <= EXECUTE;
-                    end
-                EXECUTE: 
-                    begin
-                        //Compute values for the writeback and the next program counter
-                        if (!isSYSTEM)
+            else 
+                begin
+                    case(state)
+                        HALT: 
                             begin
-                                if ((isBranch && takeBranch) || isJAL)
+                                state <= HALT;
+                            end
+                        INITIAL:
+                            begin
+                                state <= FETCH;
+                            end
+                        FETCH:
+                            begin
+                                //Schedule readEnable to go down at posedge of next clock cycle
+                                readEnable <= 0;
+
+                                state <= DECODE;
+                            end
+                        DECODE: 
+                            begin
+                                //Get instruction from BRAM module here
+
+                                fetchedInstruction <= dataOut;
+
+                                //Calculate Branch, JAL and AUIPC targets here
+                                //PC value + immediate based on isTYPE flags
+                                pcPlusImm <= pc + (isJAL ? Jimm[31:0] :
+                                            isAUIPC ? Uimm[31:0] :
+                                            Bimm[31:0]);
+
+                                state <= EXECUTE;
+                            end
+                        EXECUTE: 
+                            begin
+                                //Compute values for the writeback and the next program counter
+                                if (!isSYSTEM)
                                     begin
-                                        pc <= pcPlusImm;
+                                        if ((isBranch && takeBranch) || isJAL)
+                                            begin
+                                                pc <= pcPlusImm;
+                                            end
+                                        else if (isJALR)
+                                            begin
+                                                pc <= pcJALR;
+                                            end
+                                        else
+                                            begin
+                                                pc <= pcPlus4;
+                                            end
                                     end
-                                else if (isJALR)
+
+                                if (isJAL || isJALR) 
                                     begin
-                                        pc <= pcJALR;
+                                        writeBackData <= pcPlus4;
+                                    end
+                                else if (isLUI)
+                                    begin
+                                        writeBackData <= Uimm;
+                                    end
+                                else if (isAUIPC)
+                                    begin 
+                                        writeBackData <= pcPlusImm;
                                     end
                                 else
                                     begin
-                                        pc <= pcPlus4;
+                                        writeBackData <= aluOut;
                                     end
-                            end
+                                
+                                //If instruction is load, schedule a read for bram using caculated memAddr
+                                if (isLoad) 
+                                    begin
+                                        readEnable <= 1;
+                                        addrRead <= memAddr[ADDR_WIDTH - 1:2];
+                                    end
 
-                        if (isJAL || isJALR) 
-                            begin
-                                writeBackData <= pcPlus4;
+                                //Schedule a memory write at computed target address, memAddr
+                                if(isStore) 
+                                    begin
+                                        addrWrite <= memAddr[ADDR_WIDTH - 1:2];
+                                        dataIn <= storeData;
+                                        writeEnable <= 1;
+                                    end
+                                
+                                state <= MEMORY;	          
                             end
-                        else if (isLUI)
+                        MEMORY:
                             begin
-                                writeBackData <= Uimm;
+                                //Schedule a writeback by driving writeBackEnable for one cycle
+                                writeBackEnable <= (!isBranch && !isStore);
+
+                                //Stop reading or writing at the WB state
+                                if (isLoad)
+                                    begin
+                                        readEnable <= 0;
+                                    end
+
+                                if (isStore)
+                                    begin
+                                        writeEnable <= 0;
+                                    end
+
+                                state <= WRITE_BACK;
                             end
-                        else if (isAUIPC)
-                            begin 
-                                writeBackData <= pcPlusImm;
-                            end
-                        else
+                        WRITE_BACK:
                             begin
-                                writeBackData <= aluOut;
-                            end
-                        
-                        //If instruction is load, schedule a read for bram using caculated memAddr
-                        if (isLoad) 
-                            begin
+                                if (isLoad)
+                                    begin
+                                        //Write to register with loaded word 
+                                        registerFile[rdId] <= loadData;
+                                    end
+                                else if(writeBackEnable && rdId !== 0) 
+                                    begin
+                                        //Write back to register with data 
+                                        //derived in EXEC
+                                        registerFile[rdId] <= writeBackData;
+                                    end
+
+                                //Read next instruction (PC updated in EXEC)
+                                addrRead <= pc[ADDR_WIDTH - 1:2];
                                 readEnable <= 1;
-                                addrRead <= memAddr[ADDR_WIDTH - 1:2];
+
+                                //Stop writeback at next clock cycle
+                                writeBackEnable <= 0;
+
+                                state <= FETCH;
                             end
-
-                        //Schedule a memory write at computed target address, memAddr
-                        if(isStore) 
-                            begin
-                                addrWrite <= memAddr[ADDR_WIDTH - 1:2];
-                                dataIn <= storeData;
-                                writeEnable <= 1;
-                            end
-                        
-                        state <= MEMORY;	          
-                    end
-                MEMORY:
-                    begin
-                        //Schedule a writeback by driving writeBackEnable for one cycle
-                        writeBackEnable <= (!isBranch && !isStore);
-
-                        //Stop reading or writing at the WB state
-                        if (isLoad)
-                            begin
-                                readEnable <= 0;
-                            end
-
-                        if (isStore)
-                            begin
-                                writeEnable <= 0;
-                            end
-
-                        state <= WRITE_BACK;
-                    end
-                WRITE_BACK:
-                    begin
-                        //Write to register file
-                        if(writeBackEnable && rdId !== 0) 
-                            begin
-                                registerFile[rdId] <= writeBackData;
-                            end
-
-                        //Write to register with loaded word     
-                        if (isLoad)
-                            begin
-                                registerFile[rdId] <= loadData;
-                            end
-
-                        //Read next instruction (PC updated in EXEC)
-                        addrRead <= pc[ADDR_WIDTH - 1:2];
-                        readEnable <= 1;
-
-                        //Stop writeback at next clock cycle
-                        writeBackEnable <= 0;
-
-                        state <= FETCH;
-                    end
-            endcase
+                    endcase
+                end
         end
 
     // `ifdef SIMULATION
