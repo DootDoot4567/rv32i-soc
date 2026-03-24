@@ -16,34 +16,36 @@ extern char _heap_end;
 caddr_t _sbrk(int incr) {
     static char *heap = &_heap_start;
 
-    char *prev = *heap;
-    char *next = *heap + incr;
+    char *prev = heap;
+    char *next = heap + incr;
 
-    &heap_start = next;
+    if (next < &_heap_start || next > &_heap_end ) {
+        errno = ENONEM;
 
+        return (caddr_t) -1;
+    }
 
+    heap = next;
 
     return (caddr_t) prev;
 };
 
-ssize_t _write(int fd, const void buf[.count], size_t count) {
-
-}; 
-
-ssize_t _read(int fd, void buf[.count], size_t count) {
-
+int _close(int) {
+    errno = EBADF;
+    
+    return -1;
 };
 
-int _close(int fd) {
+off_t _lseek(int, off_t, int) {
+    errno = ESPIPE;
 
+    return -1;
 };
 
-off_t _lseek(int fd, off_t offset, int whence) {
+int _fstat(int, struct stat *st) {
+    st->st_mode = S_IFCHR;
 
-};
-
-int _fstat(int fd, struct stat *statbuf) {
-
+    return 0;
 };
 
 int _isatty(int) {
@@ -58,18 +60,30 @@ void _exit(int) {
 
 //Reentrant versions of syscalls stubs needed for our processor
 
-ssize_t _sbrk_r(int fd, const void buf[.count], size_t count);
+caddr_t _sbrk_r(struct _reent *ptr, ptrdiff_t incr) {
+    return _sbrk((int) incr);
+};
 
-ssize_t _write_r(int fd, const void buf[.count], size_t count); 
+int _write_r(struct _reent *ptr, int fd, const void *buf, size_t n) {
+    return _write(fd, buf, n);
+}; 
 
-ssize_t _read_r(int fd, void buf[.count], size_t count);
+int _read_r(struct _reent *ptr, int fd, void *buf, size_t n) {
+    return _read(fd, buf, n);
+};
 
-int _close_r(int fd);
+int _close_r(struct _reent *ptr, int fd) {
+    return _close(fd);
+};
 
-off_t _lseek_r(int fd, off_t offset, int whence);
+off_t _lseek_r(struct _reent *ptr, int fd, off_t offset, int whence) {
+    return _lseek(fd, offset, whence);
+};
 
-int _fstat_r(int fd, struct stat *statbuf);
+int _fstat_r(struct _reent *ptr, int fd, struct stat *st) {
+    return _fstat(fd, st);
+};
 
-int _isatty_r(int) {
-    return 1;
+int _isatty_r(struct _reent *ptr, int fd) {
+    return _isatty(fd);
 }
