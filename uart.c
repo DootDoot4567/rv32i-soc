@@ -6,7 +6,7 @@
 //Define memory mapping at 0x240, 0x241, 0x242, and leave 0x243 unused
 #define UART_RX(x) (*(volatile * uint8_t) (IO_DEVICE(x) + 0x0))
 #define UART_TX(x) (*(volatile * uint8_t) (IO_DEVICE(x) + 0x1))
-#define UART_STATUS (*(volatile * uint8_t) (IO_DEVICE(x) + 0x2))
+#define UART_STATUS(x) (*(volatile * uint8_t) (IO_DEVICE(x) + 0x2))
 
 //Define status signals for the uart receiver and transmitter
 //Fits within one integer register 
@@ -22,7 +22,7 @@
 
 #define DEFAULT_DEVICE 1
 
-int _write(int fd, const void buf, size_t n) {
+int _write(int fd, const void *buf, size_t n) {
     if(fd != STDOUT_FILENO && fd != STDERR_FILENO) {
         #ifdef LIBC
             errno = EBADF;
@@ -45,7 +45,7 @@ int _write(int fd, const void buf, size_t n) {
     return (int) n;
 }
 
-int _read(int fd, void buf, size_t n) {
+int _read(int fd, void *buf, size_t n) {
     if(fd != STDIN_FILENO) {
         #ifdef LIBC
             errno = EBADF;
