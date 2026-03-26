@@ -4,13 +4,13 @@ module uart #(
     input logic clock,
     input logic reset,
 
-    
+    input logic [1:0] addr_select,
 
     input logic rx,
     output logic tx
 );
     logic txDataValid = 0;
-    logic txActive, uartLine;
+    logic txActive;
     logic txDataStream;
     logic [7:0] txByteData = 0;
     logic [7:0] rxByteData;
