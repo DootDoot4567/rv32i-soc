@@ -47,7 +47,7 @@ CFLAGS=-Os \
 	-fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
 LDFLAGS=-Wl,--gc-sections -lgcc
 
-SOURCES=crt0.S main3.c uart.c utils.S
+SOURCES=crt0.S main.c uart.c utils.S
 
 ifdef LIBC
 CFLAGS+=-DLIBC
