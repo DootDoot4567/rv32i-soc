@@ -6,15 +6,15 @@ MEMORY {
 ENTRY(_start)
 
 SECTIONS {
-    .text {
+    .text : {
         _stext = .;
         KEEP(*(.isr_vector))
         *(.text.entry)
         *(.text*)
-	_etext = .;
+	    _etext = .;
     } > ROM
 
-    .rodata {
+    .rodata : {
         _srodata = .;
         *(.rodata*)
         *(.srodata*)
@@ -22,12 +22,12 @@ SECTIONS {
     } > ROM
 
     .sdata : AT(LOADADDR(.rodata) + SIZEOF(.rodata)) {
-	. = ALIGN(4);
-        _ssdata = .;
-        __global_pointer$ = . + 0x800;
-    	*(.sdata*)
-	. = ALIGN(4);
-	_esdata = .;
+        . = ALIGN(4);
+            _ssdata = .;
+            __global_pointer$ = . + 0x800;
+            *(.sdata*)
+        . = ALIGN(4);
+        _esdata = .;
     } > RAM
 
     .sbss (NOLOAD) : {
