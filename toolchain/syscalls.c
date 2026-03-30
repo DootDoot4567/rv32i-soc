@@ -20,7 +20,7 @@ caddr_t _sbrk(int incr) {
     char *next = heap + incr;
 
     if (next < &_heap_start || next > &_heap_end ) {
-        errno = ENONEM;
+        errno = ENOMEM;
 
         return (caddr_t) -1;
     }
@@ -60,7 +60,7 @@ void _exit(int) {
 
 //Reentrant versions of syscalls stubs needed for our processor
 
-caddr_t _sbrk_r(struct _reent *ptr, ptrdiff_t incr) {
+void *_sbrk_r(struct _reent *ptr, int incr) {
     return _sbrk((int) incr);
 };
 
