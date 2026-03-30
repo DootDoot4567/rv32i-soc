@@ -6,13 +6,13 @@ module processor #(
 ) (
     input logic clock,
     input logic reset,
-    input logic [WIDTH - 1:0] dataOut,
+    input logic [WIDTH - 1:0] dataRead,
 
     output logic writeEnable,
     output logic readEnable,
     output logic [ADDR_WIDTH - 1:0] addrRead,
     output logic [ADDR_WIDTH - 1:0] addrWrite,
-    output logic [WIDTH - 1:0] dataIn
+    output logic [WIDTH - 1:0] dataWrite
 );
     //Program counter and different wires to drive different pc
     //values at different states
@@ -169,7 +169,7 @@ module processor #(
     ) lsu_inst (
         .memAddr,
         .rs2,
-        .dataOut,
+        .dataRead,
         .funct3,
         .storeData,
         .loadData
@@ -183,7 +183,7 @@ module processor #(
     assign rs2 = registerFile[rs2Id];
 
     //Continously drive the instruction fetched
-    assign instr = (state === DECODE) ? dataOut : fetchedInstruction;
+    assign instr = (state === DECODE) ? dataRead : fetchedInstruction;
 
     //Continously drive the value of the pc for next instruction
     assign pcPlus4 = pc + 4;
@@ -220,7 +220,7 @@ module processor #(
 
                     writeEnable <= 0;  
                     addrWrite <= 0;
-                    dataIn <= 0; 
+                    dataWrite <= 0; 
 
                     writeBackEnable <= 0;
 
@@ -248,7 +248,7 @@ module processor #(
                             begin
                                 //Get instruction from BRAM module here
 
-                                fetchedInstruction <= dataOut;
+                                fetchedInstruction <= dataRead;
 
                                 //Calculate Branch, JAL and AUIPC targets here
                                 //PC value + immediate based on isTYPE flags
@@ -305,7 +305,7 @@ module processor #(
                                 if(isStore) 
                                     begin
                                         addrWrite <= memAddr[ADDR_WIDTH - 1:2];
-                                        dataIn <= storeData;
+                                        dataWrite <= storeData;
                                         writeEnable <= 1;
                                     end
                                 
@@ -360,7 +360,7 @@ module processor #(
     //     always @(posedge clock) 
     //         begin
     //             $display("PC=%0d instr=%h", pc, instr);
-    //             $display("Instruction opcode %b", dataOut[6:0]);
+    //             $display("Instruction opcode %b", dataRead[6:0]);
                 
     //             case (1'b1)
     //                 isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);

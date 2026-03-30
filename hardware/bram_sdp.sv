@@ -16,8 +16,8 @@ module bram_sdp #(
     input logic readEnable,
     input logic [ADDR_WIDTH-1:0] addrWrite,
     input logic [ADDR_WIDTH-1:0] addrRead,
-    input logic [WIDTH-1:0] dataIn,
-    output logic [WIDTH-1:0] dataOut
+    input logic [WIDTH-1:0] dataWrite,
+    output logic [WIDTH-1:0] dataRead
 );
 
     logic [WIDTH-1:0] memory [DEPTH];
@@ -34,7 +34,7 @@ module bram_sdp #(
         begin
             if (writeEnable)
                 begin
-                    memory[addrWrite] <= dataIn;
+                    memory[addrWrite] <= dataWrite;
                 end
         end
         
@@ -43,7 +43,7 @@ module bram_sdp #(
         begin
             if (readEnable) 
                 begin
-                    dataOut <= memory[addrRead];
+                    dataRead <= memory[addrRead];
                 end
         end
 endmodule
