@@ -19,7 +19,9 @@ module soc #(
     logic [ADDR_WIDTH - 1:0] addrRead;
     logic [ADDR_WIDTH - 1:0] addrWrite;
     logic [WIDTH - 1:0] dataWrite;
-    logic [WIDTH - 1:0] dataRead;
+    logic [WIDTH - 1:0] busDataRead;
+
+    logic [WIDTH-1:0] bramDataRead;
 
     //UART Bus
     logic [1:0] addrSelected;
@@ -33,7 +35,7 @@ module soc #(
     logic bramSelected;
 
     always_comb
-        dataRead = uartSelected ? uartDataRead : bramDataRead;
+        busDataRead = uartSelected ? uartDataRead : bramDataRead;
 
     assign uartSelected = (addrWrite >= 12'h240 && addrWrite <= 12'h243) || 
                            (addrRead >= 12'h240 && addrRead <= 12'h243);
@@ -49,7 +51,7 @@ module soc #(
     ) processor_inst (
         .clock,
         .reset,
-        .dataRead,
+        .dataRead(busDataRead),
         .writeEnable,
         .readEnable,
         .addrWrite,
@@ -66,12 +68,12 @@ module soc #(
     ) bram_inst (
         .clockWrite(clock),
         .clockRead(clock),
-        .writeEnable,
+        .writeEnable(writeEnable && bramSelected),
         .readEnable(readEnable && bramSelected),
-        .addrWrite(writeEnable && bramSelected),
+        .addrWrite,
         .addrRead,
         .dataWrite,
-        .dataRead
+        .dataRead(bramDataRead)
     );
 
     //Instantiate the UART (Top for both RX and TX)
