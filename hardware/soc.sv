@@ -13,31 +13,32 @@ module soc #(
     //Computes minimum bits needed for the mem addresses using log_2(depth)
     localparam ADDR_WIDTH=$clog2(DEPTH);
 
-    //UART 
-    localparam 
-    local
-
-    //BRAM inputs and outputs being declared as logic
+    //CPU Bus
     logic writeEnable;
     logic readEnable;
     logic [ADDR_WIDTH - 1:0] addrRead;
     logic [ADDR_WIDTH - 1:0] addrWrite;
-    logic [WIDTH - 1:0] dataIn;
-    logic [WIDTH - 1:0] dataOut;
+    logic [WIDTH - 1:0] dataWrite;
+    logic [WIDTH - 1:0] dataRead;
 
-    //UART inputs and outputs being declared as logic
-    logic [1:0] addr_select;
-    logic rx;
-    logic tx;
+    //UART Bus
+    logic [1:0] addrSelected;
+    logic [31:0] uartDataRead;
+
+    assign addrSelected = readEnable ? addrRead : 
+                                       (writeEnable ? addrWrite : 'd0);
 
     //Chip select signals
-    logic uart_selected;
-    logic bram_selected;
+    logic uartSelected;
+    logic bramSelected;
 
-    assign uart_selected = (addrWrite >= 12'h200 && addrWrite <= 12'h203);
-    assign bram_selected = (addrWrite >= 12'h400);
+    always_comb
+        dataRead = uartSelected ? uartDataRead : bramDataRead;
 
-    assign addr_select = uart_selected ? addrWrite[2:0] : 2'h3;
+    assign uartSelected = (addrWrite >= 12'h240 && addrWrite <= 12'h243) || 
+                           (addrRead >= 12'h240 && addrRead <= 12'h243);
+
+    assign bramSelected = (addrWrite >= 12'h400) || (addrRead >= 12'h400);
 
     //Instatiate the processor
     processor #(
@@ -48,12 +49,12 @@ module soc #(
     ) processor_inst (
         .clock,
         .reset,
-        .dataOut,
+        .dataRead,
         .writeEnable,
         .readEnable,
         .addrWrite,
         .addrRead,
-        .dataIn
+        .dataWrite
     );
 
     //Instatiate the BRAM (simple dual port)
@@ -66,11 +67,11 @@ module soc #(
         .clockWrite(clock),
         .clockRead(clock),
         .writeEnable,
-        .readEnable,
-        .addrWrite,
+        .readEnable(readEnable && bramSelected),
+        .addrWrite(writeEnable && bramSelected),
         .addrRead,
-        .dataIn,
-        .dataOut
+        .dataWrite,
+        .dataRead
     );
 
     //Instantiate the UART (Top for both RX and TX)
@@ -79,9 +80,11 @@ module soc #(
     ) uart_inst (
         .clock,
         .reset,
-        .addr_select,
-        .rx(dataIn),
-        .tx(dataOut)
+        .addrSelected,
+        .dataWrite,
+        .rx,
+        .dataRead(uartDataRead),
+        .tx
     );
 
 endmodule
