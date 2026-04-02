@@ -7,8 +7,8 @@ module soc #(
     input logic clock,
     input logic reset,
 
-    input logic rx,
-    output logic tx
+    input logic rxDataStream,
+    output logic txDataStream
 );
     //Computes minimum bits needed for the mem addresses using log_2(depth)
     localparam ADDR_WIDTH=$clog2(DEPTH);
@@ -26,6 +26,7 @@ module soc #(
     //UART Bus
     logic [1:0] addrSelected;
     logic [31:0] uartDataRead;
+    logic uartInterrupt;
 
     assign addrSelected = readEnable ? addrRead : 
                                        (writeEnable ? addrWrite : 'd0);
@@ -34,13 +35,12 @@ module soc #(
     logic uartSelected;
     logic bramSelected;
 
-    always_comb
-        busDataRead = uartSelected ? uartDataRead : bramDataRead;
+    assign busDataRead = uartSelected ? uartDataRead : bramDataRead;
 
     assign uartSelected = (addrWrite >= 12'h240 && addrWrite <= 12'h243) || 
                            (addrRead >= 12'h240 && addrRead <= 12'h243);
 
-    assign bramSelected = (addrWrite >= 12'h400) || (addrRead >= 12'h400);
+    assign bramSelected = !uartSelected;
 
     //Instatiate the processor
     processor #(
@@ -83,10 +83,13 @@ module soc #(
         .clock,
         .reset,
         .addrSelected,
+        .writeEnable(writeEnable && uartSelected),
+        .readEnable(readEnable && uartSelected),
         .dataWrite,
-        .rx,
+        .rxDataStream,
+        .interrupt(uartInterrupt),
         .dataRead(uartDataRead),
-        .tx
+        .txDataStream
     );
 
 endmodule
