@@ -11,7 +11,8 @@ module soc #(
     output logic txDataStream
 );
     //Computes minimum bits needed for the mem addresses using log_2(depth)
-    localparam ADDR_WIDTH=$clog2(DEPTH);
+    localparam ADDR_WIDTH = $clog2(DEPTH);
+    localparam BASE_ADDR = 32'h8000 >> 2;
 
     //CPU Bus
     logic writeEnable;
@@ -21,15 +22,28 @@ module soc #(
     logic [WIDTH - 1:0] dataWrite;
     logic [WIDTH - 1:0] busDataRead;
 
-    logic [WIDTH-1:0] bramDataRead;
+    //Active Address Bus
+    logic [ADDR_WIDTH - 1:0] activeAddr;
+
+    assign activeAddr = readEnable  ? addrRead  :
+                        writeEnable ? addrWrite :
+                        '0;
+
+
+    logic [ADDR_WIDTH - 1:0] bramAddrRead;
+    logic [ADDR_WIDTH - 1:0] bramAddrWrite;
+
+    assign bramAddrRead  = addrRead  - BASE_ADDR;
+    assign bramAddrWrite = addrWrite - BASE_ADDR;
+
+    logic [WIDTH - 1:0] bramDataRead;
 
     //UART Bus
-    logic [1:0] addrSelected;
+    logic [1:0] uartAddr;
     logic [31:0] uartDataRead;
     logic uartInterrupt;
 
-    assign addrSelected = readEnable ? addrRead : 
-                                       (writeEnable ? addrWrite : 'd0);
+    assign uartAddr = activeAddr[1:0]; 
 
     //Chip select signals
     logic uartSelected;
@@ -37,8 +51,7 @@ module soc #(
 
     assign busDataRead = uartSelected ? uartDataRead : bramDataRead;
 
-    assign uartSelected = (addrWrite >= 12'h240 && addrWrite <= 12'h243) || 
-                           (addrRead >= 12'h240 && addrRead <= 12'h243);
+    assign uartSelected = (activeAddr >= 12'h090) && (activeAddr <= 12'h093);
 
     assign bramSelected = !uartSelected;
 
@@ -70,8 +83,8 @@ module soc #(
         .clockRead(clock),
         .writeEnable(writeEnable && bramSelected),
         .readEnable(readEnable && bramSelected),
-        .addrWrite,
-        .addrRead,
+        .addrRead(bramAddrRead),
+        .addrWrite(bramAddrWrite),
         .dataWrite,
         .dataRead(bramDataRead)
     );
@@ -82,7 +95,7 @@ module soc #(
     ) uart_inst (
         .clock,
         .reset,
-        .addrSelected,
+        .addrSelected(uartAddr),
         .writeEnable(writeEnable && uartSelected),
         .readEnable(readEnable && uartSelected),
         .dataWrite,
