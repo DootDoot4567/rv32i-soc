@@ -214,7 +214,7 @@ module processor #(
                             registerFile[i] <= 32'd0;
                         end
 
-                    pc <= 0;
+                    pc <= 32'h00008000;
                     addrRead <= 0;
                     readEnable <= 1;  
 
