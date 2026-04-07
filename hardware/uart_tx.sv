@@ -22,14 +22,12 @@ module uart_tx #(
     logic [7:0] count;
     logic [7:0] data;
     logic [2:0] bitIndex;
-    logic dataValid;
 
     always @(posedge clock)
         begin
             case(state)
                 IDLE:
                     begin
-                        dataValid <= 0;
                         count <= 0;
                         done <= 0;
                         bitIndex <= 0;
@@ -82,7 +80,6 @@ module uart_tx #(
                             count <= count + 1;
                         else
                             begin
-                                dataValid <= 1;
                                 count <= 0;
                                 txActive <= 0;
                                 done <= 1;
