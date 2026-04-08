@@ -82,10 +82,6 @@ module processor #(
     //Word loaded to register using combinatorial logic
     logic [31:0] loadData;
 
-    //PC and memAddr will be indexed by [ADDR_WIDTH - 1:2]
-    //We use the second bit because we increment by 4 for the pc. 
-    //the 2 bit corresponds to the start of our word addresses
-
     //FSM states
     typedef enum {
         HALT,
@@ -189,6 +185,9 @@ module processor #(
 
     //Continously drive the value of the pc for next instruction
     assign pcPlus4 = pc + 4;
+
+    //Continously drive the mask for a store to BRAM
+    assign bramWriteMask = storeMask;
 
     always @(*)
         begin
@@ -300,16 +299,15 @@ module processor #(
                                 if (isLoad) 
                                     begin
                                         readEnable <= 1;
-                                        addrRead <= memAddr[ADDR_WIDTH - 1:2];
+                                        addrRead <= memAddr;
                                     end
 
                                 //Schedule a memory write at computed target address, memAddr
                                 if(isStore) 
                                     begin
-                                        addrWrite <= memAddr[ADDR_WIDTH - 1:2];
+                                        addrWrite <= memAddr;
                                         dataWrite <= storeData;
                                         writeEnable <= 1;
-                                        bramWriteMask <= storeMask;
                                     end
                                 
                                 state <= MEMORY;	          
@@ -347,7 +345,7 @@ module processor #(
                                     end
 
                                 //Read next instruction (PC updated in EXEC)
-                                addrRead <= pc[ADDR_WIDTH - 1:2];
+                                addrRead <= pc;
                                 readEnable <= 1;
 
                                 //Stop writeback at next clock cycle
