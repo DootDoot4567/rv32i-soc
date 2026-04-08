@@ -18,8 +18,8 @@ caddr_t _sbrk(int incr) {
 
     char *prev = heap;
     char *next = heap + incr;
-
-    if (next < &_heap_start || next > &_heap_end ) {
+    
+    if (next < &_heap_start || next > &_heap_end) {
         errno = ENOMEM;
 
         return (caddr_t) -1;
@@ -39,8 +39,8 @@ int _close(int) {
 off_t _lseek(int, off_t, int) {
     errno = ESPIPE;
 
-    return -1;
-};
+    return (off_t) -1;
+}
 
 int _fstat(int, struct stat *st) {
     st->st_mode = S_IFCHR;
@@ -60,7 +60,7 @@ void _exit(int) {
 
 //Reentrant versions of syscalls stubs needed for our processor
 
-void *_sbrk_r(struct _reent *ptr, int incr) {
+void *_sbrk_r(struct _reent *ptr, ptrdiff_t incr) {
     return _sbrk((int) incr);
 };
 
