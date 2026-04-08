@@ -181,7 +181,7 @@ module processor #(
     assign rs2 = registerFile[rs2Id];
 
     //Continously drive the instruction fetched
-    assign instr = (state === DECODE) ? dataRead : fetchedInstruction;
+    assign instr = (state == DECODE) ? dataRead : fetchedInstruction;
 
     //Continously drive the value of the pc for next instruction
     assign pcPlus4 = pc + 4;
@@ -216,7 +216,7 @@ module processor #(
                         end
 
                     pc <= 32'h00008000;
-                    addrRead <= 0;
+                    addrRead <= 32'h00008000;
                     readEnable <= 1;  
 
                     writeEnable <= 0;  
@@ -332,12 +332,12 @@ module processor #(
                             end
                         WRITE_BACK:
                             begin
-                                if (isLoad)
+                                if (isLoad && rdId != 0)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[rdId] <= loadData;
                                     end
-                                else if(writeBackEnable && rdId !== 0) 
+                                else if(writeBackEnable && rdId != 0) 
                                     begin
                                         //Write back to register with data 
                                         //derived in EXEC
