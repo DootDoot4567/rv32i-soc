@@ -87,11 +87,11 @@ module uart_rx #(
                             //Check parity
                             if (rxDataStream != parityBit)
                                 begin
-                                    parityBit <= 1;
+                                    parityError <= 1;
                                 end
                             else
                                 begin
-                                    parityBit <= 0;
+                                    parityError <= 0;
                                 end
                                 
                             state <= END_BIT;
