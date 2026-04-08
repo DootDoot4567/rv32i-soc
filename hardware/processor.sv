@@ -242,7 +242,6 @@ module processor #(
                             begin
                                 //Schedule readEnable to go down at posedge of next clock cycle
                                 readEnable <= 0;
-
                                 state <= DECODE;
                             end
                         DECODE: 
