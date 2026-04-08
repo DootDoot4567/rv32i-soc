@@ -7,13 +7,17 @@ module uart #(
     input logic [1:0] addrSelected,
     input logic writeEnable,
     input logic readEnable,
-    input logic [31:0] dataWrite,
+    input logic [8:0] dataWrite,
     input logic rxDataStream,
 
     output logic interrupt,
-    output logic [31:0] dataRead,
+    output logic [8:0] dataRead,
     output logic txDataStream
 );
+    //Transmission control
+    logic useTransmission, doneTransmission;
+    logic transmitting;
+    
     logic txActive;
 
     //Parallel data from TX and RX
@@ -41,37 +45,21 @@ module uart #(
 
     logic [7:0] rxDataRead;
     logic [7:0] rxDataWrite;
-
-    //Continous assignments for the read and write signals for FIFO
-    assign txReadEnable = !txEmpty & !txActive;
-    assign txWriteEnable = (addrSelected == 2'b01);
-
-    assign rxReadEnable = (addrSelected == 2'b00) && readEnable;
-    assign rxWriteEnable = !rxFull & rxDataValid;
-
-    assign rxDataWrite = rxByteData;
-    assign txDataWrite = dataWrite[7:0];
-
-    assign txByteData = txDataRead;
-
-    assign txDataValid = !txEmpty;
-
+   
     always_comb 
         begin
             case(addrSelected)
-                2'b00: dataRead = {24'b0, rxDataRead};
-                2'b01: dataRead = {24'b0, txDataWrite};
-                2'b10: dataRead = {24'b0, 
-                                   interrupt, 
+                2'b00: dataRead = {rxDataRead};
+                2'b10: dataRead = {interrupt, 
                                    1'b0, 
                                    txFull, 
                                    txEmpty, 
                                    rxFull, 
                                    rxEmpty, 
-                                   rxDataValid, 
-                                   txActive};
+                                   rxEmpty && !interrupt, 
+                                   txFull};
 
-                default: dataRead = 32'b0;
+                default: dataRead = 8'b0;
             endcase
         end
 
@@ -79,29 +67,59 @@ module uart #(
         begin
             if (reset) 
                 begin
+                    rxReadEnable <= 0;
+                    txReadEnable <= 0;
+                    txWriteEnable <= 0;
+
+                    useTransmission <= 0;
+
                     interrupt <= 0;
                 end 
             else 
-                begin
-                    if (rxDataValid) 
+                begin 
+                    if ((txWriteEnable || !txEmpty) && !transmitting)
                         begin
-                            interrupt <= 1;
+                            txReadEnable <= 1;
+                        end
+
+                    if ((rxWriteEnable || !rxEmpty) && !interrupt)
+                        begin
+                            rxReadEnable <= 1;
                         end
 
                     if (rxReadEnable) 
                         begin
-                            interrupt <= 0;
-                    end
+                            rxReadEnable <= 0;
+                            interrupt <= 1;
+                        end
+
+                    if (txWriteEnable) 
+                        begin
+                            txWriteEnable <= 0;
+                        end
+
+                    if (txReadEnable)
+                        begin
+                            txReadEnable <= 0;
+                            useTransmission <= 1;
+                        end
+
+                    if (doneTransmission)
+                        begin
+                            useTransmission <= 0;
+                        end
                 end
         end
+
+    assign transmitting = txActive;
 
     uart_rx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_rx_inst (
         .clock,
         .rxDataStream,
-        .rxDataValid,
-        .rxByteData
+        .rxDataValid(rxWriteEnable),
+        .rxByteData(rxDataWrite)
     );
 
     fifo #(
@@ -122,11 +140,11 @@ module uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_tx_inst (
         .clock,
-        .txDataValid,
-        .txByteData,
+        .txDataValid(useTransmission),
+        .txByteData(txDataRead),
         .txActive,
         .txDataStream,
-        .done()
+        .done(doneTransmission)
     );
 
     fifo #(
