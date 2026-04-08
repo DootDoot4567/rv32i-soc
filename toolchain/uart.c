@@ -1,7 +1,7 @@
 #include "uart.h"
 
 #define IO_BASE 0x200
-#define IO_DEVICE(x) (IO_BASE + x * 0x40)
+#define IO_DEVICE(x) (IO_BASE + (x * 0x40))
 
 //Define memory mapping at 0x240, 0x241, 0x242, and leave 0x243 unused
 #define UART_RX(x) (* (volatile uint8_t *) (IO_DEVICE(x) + 0x0))
@@ -10,13 +10,13 @@
 
 //Define status signals for the uart receiver and transmitter
 //Fits within one integer register 
+#define STATUS_WAIT_TX (1u << 0)
 #define STATUS_WAIT_RX (1u << 1)
 #define UART_FIFO_RX_EMPTY (1u << 2)
 #define UART_FIFO_RX_FULL (1u << 3)
 
-#define STATUS_WAIT_TX (1u << 4)
-#define UART_FIFO_TX_EMPTY (1u << 5)
-#define UART_FIFO_TX_FULL (1u << 6)
+#define UART_FIFO_TX_EMPTY (1u << 4)
+#define UART_FIFO_TX_FULL (1u << 5)
 
 #define STATUS_INTERRUPT (1u << 7)
 
