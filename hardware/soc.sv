@@ -12,48 +12,75 @@ module soc #(
 );
     //Computes minimum bits needed for the mem addresses using log_2(depth)
     localparam ADDR_WIDTH = $clog2(DEPTH);
-    localparam BASE_ADDR = 32'h8000 >> 2;
 
-    //CPU Bus
+    //Address offsets based on memory map declared in linker
+    localparam ROM_BASE = 32'h8000 >> 2;
+    localparam RAM_BASE = 32'h0400 >> 2;
+    localparam UART_BASE_WORD = 32'h0240 >> 2;
+    localparam UART_NUM_WORDS = 3;
+
+    /////////
+    // BUS //
+    /////////
+
+    //CPU
     logic writeEnable;
     logic readEnable;
     logic [ADDR_WIDTH - 1:0] addrRead;
     logic [ADDR_WIDTH - 1:0] addrWrite;
     logic [WIDTH - 1:0] dataWrite;
     logic [WIDTH - 1:0] busDataRead;
+    logic [3:0] bramWriteMask;
 
-    //Active Address Bus
+    //Active Address
     logic [ADDR_WIDTH - 1:0] activeAddr;
 
-    assign activeAddr = readEnable  ? addrRead  :
-                        writeEnable ? addrWrite :
-                        '0;
-
-
-    logic [ADDR_WIDTH - 1:0] bramAddrRead;
-    logic [ADDR_WIDTH - 1:0] bramAddrWrite;
-
-    assign bramAddrRead  = addrRead  - BASE_ADDR;
-    assign bramAddrWrite = addrWrite - BASE_ADDR;
-
-    logic [WIDTH - 1:0] bramDataRead;
-
-    //UART Bus
+    //UART
     logic [1:0] uartAddr;
     logic [31:0] uartDataRead;
     logic uartInterrupt;
 
-    assign uartAddr = activeAddr[1:0]; 
+    //BRAM
+    logic [ADDR_WIDTH - 1:0] bramAddrRead;
+    logic [ADDR_WIDTH - 1:0] bramAddrWrite;
+    logic [WIDTH - 1:0] bramDataRead;
 
     //Chip select signals
     logic uartSelected;
     logic bramSelected;
 
+    //Memory map signals
+    logic romSelected;
+    logic ramSelected;
+    logic romReadSelected;
+    logic ramReadSelected;
+    logic ramWriteSelected;
+
+    assign activeAddr = readEnable ? addrRead :
+                      writeEnable ? addrWrite : '0;
+
+    assign uartAddr = activeAddr[1:0]; 
+
+    //assign uartSelected = (activeAddr >= 12'h090) && (activeAddr <= 12'h093);
+    //assign uartSelected = (activeAddr >= RAM_BASE) && (activeAddr < RAM_BASE + 4);
+    assign uartSelected = (activeAddr >= UART_BASE_WORD) &&
+                      (activeAddr < UART_BASE_WORD + UART_NUM_WORDS);
+
+    assign bramSelected = !uartSelected && (romSelected || ramSelected);
+
+    assign romSelected = (activeAddr >= ROM_BASE);
+    assign ramSelected = (activeAddr >= RAM_BASE) && (activeAddr < ROM_BASE);
+
+    assign romReadSelected  = (addrRead  >= ROM_BASE);
+    assign ramReadSelected  = (addrRead  >= RAM_BASE) && (addrRead  < ROM_BASE);
+    assign ramWriteSelected = (addrWrite >= RAM_BASE) && (addrWrite < ROM_BASE);
+
+
+    assign bramAddrRead = romSelected ? (activeAddr - ROM_BASE) : (activeAddr - RAM_BASE);
+    assign bramAddrWrite = addrWrite - RAM_BASE;
+    
+
     assign busDataRead = uartSelected ? uartDataRead : bramDataRead;
-
-    assign uartSelected = (activeAddr >= 12'h090) && (activeAddr <= 12'h093);
-
-    assign bramSelected = !uartSelected;
 
     //Instatiate the processor
     processor #(
@@ -69,7 +96,8 @@ module soc #(
         .readEnable,
         .addrWrite,
         .addrRead,
-        .dataWrite
+        .dataWrite,
+        .bramWriteMask
     );
 
     //Instatiate the BRAM (simple dual port)
@@ -85,6 +113,7 @@ module soc #(
         .readEnable(readEnable && bramSelected),
         .addrRead(bramAddrRead),
         .addrWrite(bramAddrWrite),
+        .bramWriteMask,
         .dataWrite,
         .dataRead(bramDataRead)
     );
