@@ -7,17 +7,14 @@ module uart #(
     input logic [1:0] addrSelected,
     input logic writeEnable,
     input logic readEnable,
-    input logic [8:0] dataWrite,
+    input logic [7:0] dataWrite,
     input logic rxDataStream,
 
     output logic interrupt,
-    output logic [8:0] dataRead,
+    output logic [7:0] dataRead,
     output logic txDataStream
 );
-    //Transmission control
-    logic useTransmission, doneTransmission;
-    logic transmitting;
-    
+    //Transmission control    
     logic txActive;
 
     //Parallel data from TX and RX
@@ -45,22 +42,36 @@ module uart #(
 
     logic [7:0] rxDataRead;
     logic [7:0] rxDataWrite;
-   
+
+    logic busTxWrite;
+    logic [7:0] busTxData;
+    logic busRxRead;
+
+    assign busRxRead = readEnable && (addrSelected == 2'b00);
+    assign busTxWrite = writeEnable && (addrSelected == 2'b01);
+    assign busTxData = dataWrite;
+
+    logic [7:0] txByteLatched;
+
     always_comb 
         begin
-            case(addrSelected)
-                2'b00: dataRead = {rxDataRead};
-                2'b10: dataRead = {interrupt, 
-                                   1'b0, 
-                                   txFull, 
-                                   txEmpty, 
-                                   rxFull, 
-                                   rxEmpty, 
-                                   rxEmpty && !interrupt, 
-                                   txFull};
-
-                default: dataRead = 8'b0;
-            endcase
+            dataRead = 8'b0;
+            if (readEnable)
+                begin
+                    case (addrSelected)
+                        2'b00: dataRead = (!rxEmpty) ? rxDataRead : 8'b0;
+                        2'b10: dataRead = {interrupt,
+                                           1'b0,
+                                           txFull,
+                                           txEmpty,
+                                           rxFull,
+                                           rxEmpty,
+                                           rxEmpty && !interrupt,
+                                           txFull};
+                        
+                        default: dataRead = 8'b0;
+                    endcase
+                end
         end
 
     always_ff @(posedge clock or posedge reset) 
@@ -71,47 +82,45 @@ module uart #(
                     txReadEnable <= 0;
                     txWriteEnable <= 0;
 
-                    useTransmission <= 0;
+                    txByteLatched   <= 8'd0;
+                    txDataWrite <= 8'd0;
 
                     interrupt <= 0;
                 end 
             else 
-                begin 
-                    if ((txWriteEnable || !txEmpty) && !transmitting)
+                begin
+                    rxReadEnable <= 0;
+                    txReadEnable <= 0;
+                    txWriteEnable <= 0;
+
+                    if (busTxWrite) 
                         begin
+                            txWriteEnable <= 1;
+                            txDataWrite <= busTxData;
+                        end
+
+                    if (!txEmpty && !txActive) 
+                        begin
+                            txByteLatched   <= txDataRead;
                             txReadEnable <= 1;
                         end
 
-                    if ((rxWriteEnable || !rxEmpty) && !interrupt)
+                    if ((rxWriteEnable || !rxEmpty) && !interrupt) 
                         begin
                             rxReadEnable <= 1;
                         end
 
                     if (rxReadEnable) 
                         begin
-                            rxReadEnable <= 0;
                             interrupt <= 1;
                         end
 
-                    if (txWriteEnable) 
+                    if (busRxRead) 
                         begin
-                            txWriteEnable <= 0;
-                        end
-
-                    if (txReadEnable)
-                        begin
-                            txReadEnable <= 0;
-                            useTransmission <= 1;
-                        end
-
-                    if (doneTransmission)
-                        begin
-                            useTransmission <= 0;
+                            interrupt <= 0;
                         end
                 end
         end
-
-    assign transmitting = txActive;
 
     uart_rx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
@@ -140,11 +149,10 @@ module uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_tx_inst (
         .clock,
-        .txDataValid(useTransmission),
-        .txByteData(txDataRead),
+        .txDataValid(txReadEnable),
+        .txByteData(txByteLatched),
         .txActive,
-        .txDataStream,
-        .done(doneTransmission)
+        .txDataStream
     );
 
     fifo #(
