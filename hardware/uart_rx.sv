@@ -14,6 +14,7 @@ module uart_rx #(
         IDLE,
         START_BIT,
         DATA_BIT,
+        PARITY_BIT,
         END_BIT
     } state_t;
 
@@ -23,6 +24,8 @@ module uart_rx #(
     logic [7:0] data;
     logic [2:0] bitIndex;
     logic dataValid;
+    logic parityBit;
+    logic parityError;
 
     always @(posedge clock)
         begin
@@ -32,6 +35,7 @@ module uart_rx #(
                         dataValid <= 0;
                         count <= 0;
                         bitIndex <= 0;
+                        parityError <= 0;
 
                         if (rxDataStream === 1'b0)
                             state <= START_BIT;
@@ -67,9 +71,31 @@ module uart_rx #(
                                 else
                                     begin
                                         bitIndex <= 0;
-                                        state <= END_BIT;
+                                        parityBit <= ^{data[6:0], rxDataStream}; 
+                                        state <= PARITY_BIT;
                                     end
                             end
+                    end
+                PARITY_BIT:
+                    begin
+                        if (count < CYCLES_PER_BIT - 1)
+                            count <= count + 1;
+                        else
+                        begin
+                            count <= 0;
+
+                            //Check parity
+                            if (rxDataStream != parityBit)
+                                begin
+                                    parityBit <= 1;
+                                end
+                            else
+                                begin
+                                    parityBit <= 0;
+                                end
+                                
+                            state <= END_BIT;
+                        end
                     end
                 END_BIT:
                     begin
@@ -77,8 +103,18 @@ module uart_rx #(
                             count <= count + 1;
                         else
                             begin
-                                dataValid <= 1;
                                 count <= 0;
+
+                                if (!parityError)
+                                    begin
+                                        dataValid <= 1;
+                                    end
+                                else
+                                    begin
+                                        dataValid <= 0;
+                                        $display("PARITY ERROR!");
+                                    end
+
                                 state <= IDLE;
                             end
                     end
