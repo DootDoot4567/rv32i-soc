@@ -8,7 +8,8 @@ module lsu #(
     input logic [2:0] funct3,
 
     output logic [31:0] storeData,
-    output logic [31:0] loadData 
+    output logic [31:0] loadData,
+    output logic [3:0] storeMask
 );
     //Helper variables to help compute loadData
     logic [15:0] loadHalf;
@@ -41,29 +42,58 @@ module lsu #(
     //Store logic, combinatorially builds the word stored
     always @(*)
         begin
-            if (funct3 == 3'b000)
-                begin
-                    case(memAddr[1:0])
-                        0: storeData[7:0]   = rs2[7:0];
-                        1: storeData[15:8]  = rs2[7:0];
-                        2: storeData[23:16] = rs2[7:0];
-                        3: storeData[31:24] = rs2[7:0];
-                    endcase
-                end
-            
-            else if (funct3 == 3'b001)
-                begin
-                    case(memAddr[1:0])
-                        0: storeData[15:0]   = rs2[15:0];
-                        3: storeData[31:16] = rs2[15:0];
-                    endcase
-                end
+            storeData = 32'b0;
+            storeMask = 4'b0000;
 
-            else if (funct3 == 3'b010)
-                begin
-                    storeData = rs2;
-                end
+            case (funct3)
+                3'b000:
+                    begin
+                        case (memAddr[1:0])
+                            2'd0: 
+                                begin
+                                    storeData = {24'b0, rs2[7:0]};
+                                    storeMask = 4'b0001;
+                                end
+                            2'd1: 
+                                begin
+                                    storeData = {16'b0, rs2[7:0], 8'b0};
+                                    storeMask = 4'b0010;
+                                end
+                            2'd2: 
+                                begin
+                                    storeData = {8'b0, rs2[7:0], 16'b0};
+                                    storeMask = 4'b0100;
+                                end
+                            2'd3: 
+                                begin
+                                    storeData = {rs2[7:0], 24'b0};
+                                    storeMask = 4'b1000;
+                                end
+                        endcase
+                    end
+
+                3'b001: 
+                    begin
+                        case (memAddr[1])
+                            1'b0: 
+                                begin
+                                    storeData = {16'b0, rs2[15:0]};
+                                    storeMask = 4'b0011;
+                                end
+                            1'b1: 
+                                begin
+                                    storeData = {rs2[15:0], 16'b0};
+                                    storeMask = 4'b1100;
+                                end
+                        endcase
+                    end
+
+                3'b010: 
+                    begin
+                        storeData = rs2;
+                        storeMask = 4'b1111;
+                    end
+            endcase
         end
-
 
 endmodule
