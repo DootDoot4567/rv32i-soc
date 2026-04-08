@@ -12,7 +12,8 @@ module processor #(
     output logic readEnable,
     output logic [ADDR_WIDTH - 1:0] addrRead,
     output logic [ADDR_WIDTH - 1:0] addrWrite,
-    output logic [WIDTH - 1:0] dataWrite
+    output logic [WIDTH - 1:0] dataWrite,
+    output logic [3:0] bramWriteMask
 );
     //Program counter and different wires to drive different pc
     //values at different states
@@ -76,7 +77,7 @@ module processor #(
 
     //Word written to word addressed bram and the mask 
     logic [31:0] storeData;
-    //logic [31:0] storeMask;
+    logic [3:0] storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] loadData;
@@ -172,7 +173,8 @@ module processor #(
         .dataRead,
         .funct3,
         .storeData,
-        .loadData
+        .loadData,
+        .storeMask
     );
 
     //Continously drive the target memory address (used by loads and stores)
@@ -307,6 +309,7 @@ module processor #(
                                         addrWrite <= memAddr[ADDR_WIDTH - 1:2];
                                         dataWrite <= storeData;
                                         writeEnable <= 1;
+                                        bramWriteMask <= storeMask;
                                     end
                                 
                                 state <= MEMORY;	          
