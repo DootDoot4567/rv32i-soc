@@ -47,7 +47,7 @@ CFLAGS=-Os \
 	-fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
 LDFLAGS=-Wl,--gc-sections -lgcc
 
-SOURCES=crt0.S main.c uart.c utils.S
+SOURCES=crt0.S main.c uart.c
 
 ifdef LIBC
 CFLAGS+=-DLIBC
@@ -71,7 +71,7 @@ PTY=/tmp/qemu-uart
 all: $(FIRMWARE_ELF)
 
 $(FIRMWARE_ELF): $(SOURCES) $(LINKER_SCRIPT)
-	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) $(LDFLAGS) -o $@ $(SOURCES)
+	$(CC) $(CFLAGS) -T $(LINKER_SCRIPT) -o $@ $(SOURCES) $(LDFLAGS)
 
 # -M virt: Generic virtual platform with UART, PLIC (interrupt controller), etc
 # -bios none: Don't load any BIOS/bootloader

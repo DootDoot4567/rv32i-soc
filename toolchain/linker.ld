@@ -11,48 +11,43 @@ SECTIONS {
         KEEP(*(.isr_vector))
         *(.text.entry)
         *(.text*)
-	    _etext = .;
+        _etext = .;
     } > ROM
-
     .rodata : {
         _srodata = .;
         *(.rodata*)
         *(.srodata*)
         _erodata = .;
     } > ROM
-
     .sdata : AT(LOADADDR(.rodata) + SIZEOF(.rodata)) {
         . = ALIGN(4);
-            _ssdata = .;
-            __global_pointer$ = . + 0x800;
-            *(.sdata*)
+        _ssdata = .;
+        __global_pointer$ = . + 0x800;
+        *(.sdata*)
         . = ALIGN(4);
         _esdata = .;
     } > RAM
-
     .sbss (NOLOAD) : {
         . = ALIGN(4);
         _ssbss = .;
         *(.sbss*)
         . = ALIGN(4);
-	_esbss = .;
+        _esbss = .;
     } > RAM
-
-    .data : AT(LOADADDR(.sdata) + SIZEOF(.sdata)){
+    .data : AT(LOADADDR(.sdata) + SIZEOF(.sdata)) {
         . = ALIGN(4);
         _sdata = .;
         *(.data*)
         . = ALIGN(4);
         _edata = .;
     } > RAM
-
     .bss (NOLOAD) : {
         . = ALIGN(4);
         _sbss = .;
         *(.bss*)
         *(COMMON)
         . = ALIGN(4);
-	_ebss = .;
+        _ebss = .;
     } > RAM
 
     PROVIDE(_stack_top = ORIGIN(RAM) + LENGTH(RAM));
