@@ -8,14 +8,14 @@ module execution_tb();
     parameter BAUD_RATE = 115200;
     parameter PTY_PATH = "/tmp/vserial";
     parameter WIDTH = 32;
-    parameter DEPTH = 16384;
+    parameter DEPTH = 65536;
     parameter CYCLES_PER_BIT = 217;
 
     logic clock;
 
     initial clock = 0;
 
-    localparam real CLOCK_HALF_PERIOD = 20;  // 12.0 MHz
+    localparam real CLOCK_HALF_PERIOD = 20;  // 25.0 MHz
 
     always #(CLOCK_HALF_PERIOD) clock = ~clock;
 
@@ -203,7 +203,11 @@ module execution_tb();
         $display("Press Ctrl+C to stop the simulation");
 
         // Comment to run forever - user will Ctrl+C to stop
-        // #100_000_000; // Run for 100 ms max
-        // $finish;
+
+        $dumpfile("soc_exec_tb.vcd");
+        $dumpvars(0, soc_inst);
+
+        #500_000_000; // Run for 100 ms max
+        $finish;
     end
 endmodule
