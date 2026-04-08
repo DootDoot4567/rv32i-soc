@@ -6,8 +6,7 @@ module uart_tx #(
     input logic [7:0] txByteData,
 
     output logic txActive,
-    output logic txDataStream,
-    output logic done
+    output logic txDataStream
 );
 
     typedef enum{
@@ -31,7 +30,6 @@ module uart_tx #(
                 IDLE:
                     begin
                         count <= 0;
-                        done <= 0;
                         bitIndex <= 0;
                         txDataStream <= 1;
                         txActive <= 0;
@@ -97,7 +95,6 @@ module uart_tx #(
                             begin
                                 count <= 0;
                                 txActive <= 0;
-                                done <= 1;
                                 state <= IDLE;
                             end
                     end
