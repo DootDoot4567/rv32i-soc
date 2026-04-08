@@ -14,6 +14,7 @@ module uart_tx #(
         IDLE,
         START_BIT,
         DATA_BIT,
+        PARITY_BIT,
         END_BIT
     } state_t;
 
@@ -22,6 +23,7 @@ module uart_tx #(
     logic [7:0] count;
     logic [7:0] data;
     logic [2:0] bitIndex;
+    logic parityBit;
 
     always @(posedge clock)
         begin
@@ -37,6 +39,7 @@ module uart_tx #(
                         if (txDataValid)
                             begin
                                 data <= txByteData;
+                                parityBit <= ^txByteData; 
                                 txActive <= 1;
                                 state <= START_BIT;
                             end
@@ -68,9 +71,21 @@ module uart_tx #(
                                 else
                                     begin
                                         bitIndex <= 0;
-                                        state <= END_BIT;
+                                        state <= PARITY_BIT;
                                     end
                             end
+                    end
+                PARITY_BIT:
+                    begin
+                        txDataStream <= parityBit;
+
+                        if (count < CYCLES_PER_BIT - 1)
+                            count <= count + 1;
+                        else
+                        begin
+                            count <= 0;
+                            state <= END_BIT;
+                        end
                     end
                 END_BIT:
                     begin
