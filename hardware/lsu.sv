@@ -25,6 +25,8 @@ module lsu #(
                 1: loadByte = dataRead[15:8];
                 2: loadByte = dataRead[23:16];
                 3: loadByte = dataRead[31:24];
+
+                default: loadByte = 8'b0;
             endcase
 
             case(funct3)
@@ -33,9 +35,7 @@ module lsu #(
                 3'b100: loadData = {24'b0, loadByte};
                 3'b101: loadData = {16'b0, loadHalf};
 
-                default:
-                    loadData = dataRead;
-            
+                default: loadData = dataRead;
             endcase
         end
 
@@ -69,6 +69,12 @@ module lsu #(
                                     storeData = {rs2[7:0], 24'b0};
                                     storeMask = 4'b1000;
                                 end
+
+                            default: 
+                                begin 
+                                    storeData = 32'b0; 
+                                    storeMask = 4'b0000;
+                                end
                         endcase
                     end
 
@@ -85,6 +91,12 @@ module lsu #(
                                     storeData = {rs2[15:0], 16'b0};
                                     storeMask = 4'b1100;
                                 end
+
+                            default:
+                                begin
+                                    storeData = 32'b0; 
+                                    storeMask = 4'b0000;
+                                end
                         endcase
                     end
 
@@ -92,6 +104,12 @@ module lsu #(
                     begin
                         storeData = rs2;
                         storeMask = 4'b1111;
+                    end
+
+                default: 
+                    begin
+                        storeData = 32'b0;
+                        storeMask = 4'b0000;
                     end
             endcase
         end
