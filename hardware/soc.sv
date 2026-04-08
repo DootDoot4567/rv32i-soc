@@ -17,8 +17,8 @@ module soc #(
     //Address offsets based on memory map declared in linker
     localparam ROM_BASE = 32'h8000;
     localparam RAM_BASE = 32'h0400;
-    localparam ROM_SIZE_BYTES = DEPTH * 4;  // if BRAM is 32-bit words
-    localparam RAM_SIZE_BYTES = DEPTH * 4;
+    localparam ROM_SIZE_BYTES = (32'h8000) * 4;
+    localparam RAM_SIZE_BYTES = (32'h8000 - 32'h0400) * 4;
     localparam UART_BASE = 32'h0240;
     localparam UART_NUM_BYTES = 4;
 
@@ -75,11 +75,11 @@ module soc #(
     assign ramSelected = (activeAddr >= RAM_BASE) &&
                          (activeAddr < RAM_BASE + RAM_SIZE_BYTES);
 
-    assign romReadSelected  = (addrRead >= ROM_BASE) &&
-                              (addrRead < ROM_BASE + ROM_SIZE_BYTES);
+    assign romReadSelected = (addrRead >= ROM_BASE) &&
+                             (addrRead < ROM_BASE + ROM_SIZE_BYTES);
 
-    assign ramReadSelected  = (addrRead >= RAM_BASE) &&
-                              (addrRead < RAM_BASE + RAM_SIZE_BYTES);
+    assign ramReadSelected = (addrRead >= RAM_BASE) &&
+                             (addrRead < RAM_BASE + RAM_SIZE_BYTES);
 
     assign ramWriteSelected = (addrWrite >= RAM_BASE) &&
                               (addrWrite < RAM_BASE + RAM_SIZE_BYTES);
@@ -89,7 +89,20 @@ module soc #(
 
     assign bramAddrWrite = ramWriteSelected ? ((addrWrite - RAM_BASE) >> 2) : '0;
     
-    assign uartDataWrite8 = dataWrite[7:0];
+    always_comb 
+        begin
+            case (addrWrite[1:0])
+                2'b00: uartDataWrite8 = dataWrite[7:0];
+                2'b01: uartDataWrite8 = dataWrite[15:8];
+                2'b10: uartDataWrite8 = dataWrite[23:16];
+                2'b11: uartDataWrite8 = dataWrite[31:24];
+                default: 
+                    begin
+                        uartDataWrite8 = 8'h00;
+                    end
+            endcase
+        end
+
     assign busDataRead = uartSelected ? {uartDataRead8, 
                                          uartDataRead8, 
                                          uartDataRead8, 
