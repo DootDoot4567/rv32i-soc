@@ -2,7 +2,8 @@ module lsu #(
     parameter WIDTH = 32
 ) (
 
-    input logic [31:0] memAddr,
+    input logic [31:0] loadAddr,
+    input logic [31:0] storeAddr,
     input logic [31:0] rs2,
     input logic [WIDTH - 1:0] dataRead,
     input logic [2:0] funct3,
@@ -18,9 +19,9 @@ module lsu #(
     //Load logic for half and full words and bytes
     always @(*)
         begin
-            loadHalf = memAddr[1] ? dataRead[31:16] : dataRead[15:0];
+            loadHalf = loadAddr[1] ? dataRead[31:16] : dataRead[15:0];
 
-            case(memAddr[1:0])
+            case(loadAddr[1:0])
                 0: loadByte = dataRead[7:0];
                 1: loadByte = dataRead[15:8];
                 2: loadByte = dataRead[23:16];
@@ -48,56 +49,14 @@ module lsu #(
             case (funct3)
                 3'b000:
                     begin
-                        case (memAddr[1:0])
-                            2'd0: 
-                                begin
-                                    storeData = {24'b0, rs2[7:0]};
-                                    storeMask = 4'b0001;
-                                end
-                            2'd1: 
-                                begin
-                                    storeData = {16'b0, rs2[7:0], 8'b0};
-                                    storeMask = 4'b0010;
-                                end
-                            2'd2: 
-                                begin
-                                    storeData = {8'b0, rs2[7:0], 16'b0};
-                                    storeMask = 4'b0100;
-                                end
-                            2'd3: 
-                                begin
-                                    storeData = {rs2[7:0], 24'b0};
-                                    storeMask = 4'b1000;
-                                end
-
-                            default: 
-                                begin 
-                                    storeData = 32'b0; 
-                                    storeMask = 4'b0000;
-                                end
-                        endcase
+                        storeData = {rs2[7:0], rs2[7:0], rs2[7:0], rs2[7:0]};
+                        storeMask = 4'b0001 << storeAddr[1:0];
                     end
 
                 3'b001: 
                     begin
-                        case (memAddr[1])
-                            1'b0: 
-                                begin
-                                    storeData = {16'b0, rs2[15:0]};
-                                    storeMask = 4'b0011;
-                                end
-                            1'b1: 
-                                begin
-                                    storeData = {rs2[15:0], 16'b0};
-                                    storeMask = 4'b1100;
-                                end
-
-                            default:
-                                begin
-                                    storeData = 32'b0; 
-                                    storeMask = 4'b0000;
-                                end
-                        endcase
+                        storeData = {rs2[15:0], rs2[15:0], rs2[15:0], rs2[15:0]};
+                        storeMask = 4'b0011 << {storeAddr[1], 1'b0};
                     end
 
                 3'b010: 
