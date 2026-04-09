@@ -73,7 +73,8 @@ module processor #(
     logic [31:0] writeBackData;
 
     //Computed memory address for loads and stores
-    logic [31:0] memAddr;
+    logic [31:0] loadAddr;
+    logic [31:0] storeAddr;
 
     //Word written to word addressed bram and the mask 
     logic [31:0] storeData;
@@ -164,7 +165,8 @@ module processor #(
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .memAddr,
+        .loadAddr,
+        .storeAddr,
         .rs2,
         .dataRead,
         .funct3,
@@ -174,7 +176,8 @@ module processor #(
     );
 
     //Continously drive the target memory address (used by loads and stores)
-    assign memAddr = rs1 + (isLoad ? Iimm : Simm); 
+    assign loadAddr  = rs1 + Iimm;
+    assign storeAddr = rs1 + Simm;
 
     //Continously drive both registers from decoded idx 
     assign rs1 = registerFile[rs1Id];
@@ -187,7 +190,7 @@ module processor #(
     assign pcPlus4 = pc + 4;
 
     //Continously drive the mask for a store to BRAM
-    assign bramWriteMask = storeMask;
+    //assign bramWriteMask = storeMask;
 
     always @(*)
         begin
@@ -294,35 +297,34 @@ module processor #(
                                         writeBackData <= aluOut;
                                     end
                                 
-                                //If instruction is load, schedule a read for bram using caculated memAddr
+                                //If instruction is load, schedule a read
+                                //otherwise schedule a memory write
                                 if (isLoad) 
                                     begin
                                         readEnable <= 1;
-                                        addrRead <= memAddr;
+                                        addrRead <= loadAddr;
                                     end
-
-                                //Schedule a memory write at computed target address, memAddr
-                                if(isStore) 
+                                else if(isStore) 
                                     begin
-                                        addrWrite <= memAddr;
+                                        addrWrite <= storeAddr;
                                         dataWrite <= storeData;
+                                        bramWriteMask <= storeMask;
                                         writeEnable <= 1;
                                     end
+
+                                //Schedule a writeback by driving writeBackEnable for one cycle
+                                writeBackEnable <= (!isBranch && !isStore);
                                 
                                 state <= MEMORY;	          
                             end
                         MEMORY:
                             begin
-                                //Schedule a writeback by driving writeBackEnable for one cycle
-                                writeBackEnable <= (!isBranch && !isStore);
-
                                 //Stop reading or writing at the WB state
                                 if (isLoad)
                                     begin
                                         readEnable <= 0;
                                     end
-
-                                if (isStore)
+                                else if (isStore)
                                     begin
                                         writeEnable <= 0;
                                     end
