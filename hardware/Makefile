@@ -8,9 +8,9 @@ PROGRAMMER	?= ./spi_flash_programmer.sh
 PCF_FILE	?= Go_Board_Constraints.pcf
 
 TOP			?= soc
-TOP_TB		?= instructions_tb
-MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv
-MODULES_TB	?= instructions_tb.sv
+TOP_TB		?= soc_tb
+MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+MODULES_TB	?= soc_tb.sv
 
 # Use yosys to perform synthesis
 %.json : %.sv
