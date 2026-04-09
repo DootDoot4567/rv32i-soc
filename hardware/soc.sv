@@ -89,7 +89,7 @@ module soc #(
 
     assign bramAddrWrite = ramWriteSelected ? ((addrWrite - RAM_BASE) >> 2) : '0;
     
-    always_comb 
+    always @(*)
         begin
             case (addrWrite[1:0])
                 2'b00: uartDataWrite8 = dataWrite[7:0];
