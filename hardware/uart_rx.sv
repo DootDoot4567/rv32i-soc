@@ -27,7 +27,7 @@ module uart_rx #(
     logic parityBit;
     logic parityError;
 
-    always @(posedge clock)
+    always_ff @(posedge clock)
         begin
             case(state)
                 IDLE:
@@ -112,7 +112,6 @@ module uart_rx #(
                                 else
                                     begin
                                         dataValid <= 0;
-                                        $display("PARITY ERROR!");
                                     end
 
                                 state <= IDLE;
