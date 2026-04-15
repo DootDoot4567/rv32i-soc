@@ -20,7 +20,8 @@ module processor #(
 
     //Program counter and different wires to drive different pc
     //values at different states
-    logic [31:0] f_pc;
+    logic [31:0] f_pc, fd_pc, de_pc;
+    logic [31:0] fd_nextPc, de_nextPc, em_nextPc, mw_nextPc;
     logic [31:0] f_pcPlus4;
     logic [31:0] de_pcPlusImm;
     logic [31:0] e_pcJALR;
@@ -33,7 +34,20 @@ module processor #(
     logic e_isLTU;
     logic e_isLT;
 
-    logic [31:0] instr;
+    //Instruction variable and its variants (bubbled)
+    logic [31:0] d_instr, de_instr, em_instr, mw_instr;
+
+    //Read (BRAM & UART operation) variables (bubbled)
+    logic f_readEnable, em_readEnable;
+    logic [ADDR_WIDTH - 1:0] f_addrRead, em_addrRead;
+
+    //NOT USED
+    logic [31:0] em_dataRead;
+
+    //Write (BRAM & UART operation) variables (bubbled)
+    logic em_writeEnable;
+    logic [ADDR_WIDTH - 1:0] em_addrWrite;
+    logic [31:0] em_dataWrite;
 
     //Boolean flags used by the decoder, processor, and alu
     logic d_isALUreg, e_isALUreg; 
@@ -43,17 +57,17 @@ module processor #(
     logic d_isJAL, e_isJAL;    
     logic d_isAUIPC, e_isAUIPC;    
     logic d_isLUI, e_isLUI;    
-    logic d_isLoad, e_isLoad;    
-    logic d_isStore, e_isStore;    
+    logic d_isLoad, e_isLoad, em_isLoad, mw_isLoad;  
+    logic d_isStore, e_isStore, em_isStore;
     logic d_isSYSTEM, e_isSYSTEM;
 
     //Indexes for input registers and ra register
     logic [4:0] d_rs1Id, e_rs1Id;
     logic [4:0] d_rs2Id, e_rs2Id;
-    logic [4:0] d_rdId, e_rdId;
+    logic [4:0] d_rdId, e_rdId, em_rdId, mw_rdId;
 
     //Optional opcode fields for instruction
-    logic [2:0] d_funct3, e_funct3;
+    logic [2:0] d_funct3, e_funct3, em_funct3, mw_funct3;
     logic [6:0] d_funct7, e_funct7;
 
     //Immediate values for different types of instructions
@@ -64,15 +78,16 @@ module processor #(
     logic [31:0] d_Jimm, e_Jimm;
 
     //Environment defined variables
-    // logic d_isEBREAK, e_isEBREAK;
-    // logic d_isECALL, e_isECALL;
-    // logic d_isCSRRS, e_isCSRRS;
+    //################### IMPLEMENT #################################################
+
+    //CANNOT IMPLEMENT RIGHT NOW???
+    logic d_isEBREAK, e_isEBREAK;
+    logic d_isECALL, e_isECALL;
+    logic d_isCSRRS, e_isCSRRS;
+    //###############################################################################
 
     //Register fields from instruction decoding
-    logic [31:0] d_rs1, e_rs1;
-    logic [31:0] d_rs2, e_rs2;
-
-    logic [31:0] de_rs1, de_rs2, em_rs1, em_rs2;
+    logic [31:0] de_rs1, de_rs2;
 
     //Effective instructions (bubbled from state to state)
     logic [31:0] d_effectiveInstr, 
@@ -88,12 +103,12 @@ module processor #(
     logic em_writeBackEnable, mw_writeBackEnable;
 
     //Computed memory address for loads and stores
-    logic [31:0] de_loadAddr;
-    logic [31:0] de_storeAddr;
+    logic [31:0] w_loadAddr, de_loadAddr, em_loadAddr, mw_loadAddr;
+    logic [31:0] e_storeAddr, de_storeAddr;
 
     //Word written to word addressed bram and the mask 
     logic [31:0] e_storeData;
-    logic [3:0] e_storeMask;
+    logic [3:0] e_storeMask, em_storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] w_loadData;
@@ -209,11 +224,12 @@ module processor #(
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .loadAddr,
-        .storeAddr,
+        .loadAddr(w_loadAddr),
+        .storeAddr(e_storeAddr),
         .rs2(de_rs2),
         .dataRead(dataRead),
-        .funct3(mw_funct3),
+        .funct3Load(mw_funct3),
+        .funct3Store(e_funct3),
         .storeData(e_storeData),
         .loadData(w_loadData),
         .storeMask(e_storeMask)
@@ -226,42 +242,14 @@ module processor #(
     assign w_effectiveInstr = mw_instr;
                   
     //Continously drive the target memory address (used by loads and stores)
-    assign loadAddr  = (reset) ? 0 : de_rs1 + d_Iimm;
-    assign storeAddr = (reset) ? 0 : de_rs1 + d_Simm;
-
-    //Continously drive both registers from decoded idx 
-    assign de_rs1 = (reset) ? 0 : registerFile[d_rs1Id];
-    assign de_rs2 = (reset) ? 0 : registerFile[d_rs2Id];
+    assign w_loadAddr = mw_loadAddr;
+    assign e_storeAddr = de_storeAddr;
 
     //Continously drive the instruction fetched
-    //assign instr = (state == DECODE) ? dataRead : fetchedInstruction;
+    assign d_instr = dataRead;
 
     //Continously drive the value of the pc for next instruction
     assign f_pcPlus4 = f_pc + 4;
-
-    logic [31:0] fd_pc, de_pc;
-    logic [31:0] d_instr, de_instr, em_instr, mw_instr;
-
-    assign d_instr = dataRead;
-
-    logic [31:0] fd_nextPc, de_nextPc, em_nextPc, mw_nextPc;
-
-    logic [31:0] em_memAddr, mw_memAddr;
-
-    logic [4:0] em_rdId, mw_rdId;
-    logic [2:0] em_funct3, mw_funct3;
-
-    logic em_isLoad, mw_isLoad;
-    logic em_isStore;
-
-    logic f_readEnable, em_readEnable;
-    logic [ADDR_WIDTH - 1:0] f_addrRead, em_addrRead;
-    logic [31:0] em_dataRead;
-
-    logic em_writeEnable;
-    logic [ADDR_WIDTH - 1:0] em_addrWrite;
-    logic [31:0] em_dataWrite;
-    logic [3:0] em_storeMask;
 
     assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
     assign addrRead = em_readEnable ? em_addrRead : (f_readEnable ? f_addrRead : 0);
@@ -329,9 +317,15 @@ module processor #(
                     f_pc <= 0; fd_pc <= 0; de_pc <= 0;
                     fd_nextPc <= 0; de_nextPc <= 0; em_nextPc <= 0; mw_nextPc <= 0; 
 
+                    de_pcPlusImm <= 0;
+
                     de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
 
-                    em_memAddr <= 0; mw_memAddr <= 0;
+                    de_rs1 <= 0;
+                    de_rs2 <= 0;
+
+                    de_loadAddr <= 0; em_loadAddr <= 0; mw_loadAddr <= 0;
+                    de_storeAddr <= 0;
 
                     f_addrRead <= 0; em_addrRead <= 0;
                     f_readEnable <= 1; em_readEnable <= 0;  
@@ -343,7 +337,7 @@ module processor #(
                     em_isStore <= 0; 
 
                     em_writeEnable <= 0;
-                    em_dataRead <= 0;
+                    //em_dataRead <= 0;
                     em_addrWrite <= 0;
                     em_dataWrite <= 0;
                     em_storeMask <= 0;
@@ -393,6 +387,13 @@ module processor #(
                                 de_pc <= fd_pc;
                                 de_instr <= d_effectiveInstr;
 
+                                de_loadAddr  = registerFile[d_rs1Id] + d_Iimm;
+                                de_storeAddr = registerFile[d_rs1Id] + d_Simm;
+
+                                de_rs1 = registerFile[d_rs1Id];
+                                de_rs2 = registerFile[d_rs2Id];
+
+
                                 state <= EXECUTE;
                             end
                         EXECUTE: 
@@ -413,7 +414,11 @@ module processor #(
                                     end
 
 
-                                if (e_isJAL || e_isJALR) 
+                                if (e_isALUreg || e_isALUimm)
+                                    begin
+                                        em_writeBackData <= e_aluOut;
+                                    end
+                                else if (e_isJAL || e_isJALR) 
                                     begin
                                         em_writeBackData <= de_nextPc;
                                     end
@@ -425,10 +430,16 @@ module processor #(
                                     begin 
                                         em_writeBackData <= de_pcPlusImm;
                                     end
+                                else if (e_isCSRRS)
+                                    begin
+                                        em_writeBackData <= e_csrData;
+                                    end
                                 else
                                     begin
-                                        em_writeBackData <= e_aluOut;
+                                        em_writeBackData <= 32'd0;
                                     end
+
+                                /////////////////////IMPLEMENT EBREAK 
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
@@ -441,14 +452,17 @@ module processor #(
                                     begin
                                         em_addrWrite <= de_storeAddr;
                                         em_dataWrite <= e_storeData;
-                                        bramWriteMask <= e_storeMask;
+                                        em_storeMask <= e_storeMask;
                                         em_writeEnable <= 1;
                                     end
 
-                                em_writeBackEnable <= (!em_isBranch && !em_isStore);
-
-                                em_rs1 <= de_rs1;
-                                em_rs2 <= de_rs2;
+                                em_writeBackEnable <= (e_isALUreg ||
+                                                       e_isALUimm ||
+                                                       e_isJAL ||
+                                                       e_isJALR ||
+                                                       e_isLUI ||
+                                                       e_isAUIPC ||
+                                                       e_isCSRRS);
 
                                 em_rdId <= e_rdId;
                                 em_funct3 <= e_funct3;
@@ -456,7 +470,7 @@ module processor #(
                                 em_isLoad <= e_isLoad;
                                 em_isStore <= e_isStore;
 
-                                em_memAddr <= de_memAddr;
+                                em_loadAddr <= de_loadAddr;
                                 em_instr <= e_effectiveInstr;
                                 
                                 state <= MEMORY;	          
@@ -465,7 +479,6 @@ module processor #(
                             begin
                                 //Schedule a writeback by driving writeBackEnable for one cycle
                                 mw_writeBackEnable <= em_writeBackEnable;
-
 
                                 //Stop reading or writing at the WB state
                                 if (em_isLoad)
@@ -482,10 +495,9 @@ module processor #(
 
                                 mw_isLoad <= em_isLoad;
                                 mw_nextPc <= em_nextPc;
-                                mw_memAddr <= em_memAddr;
+                                mw_loadAddr <= em_loadAddr;
 
                                 mw_writeBackData <= em_writeBackData;
-                                mw_writeBackEnable <= em_writeBackEnable;
 
                                 mw_instr <= m_effectiveInstr;
 
