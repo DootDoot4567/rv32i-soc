@@ -24,7 +24,7 @@ module uart_tx #(
     logic [2:0] bitIndex;
     logic parityBit;
 
-    always @(posedge clock)
+    always_ff @(posedge clock)
         begin
             case(state)
                 IDLE:
