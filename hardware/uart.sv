@@ -7,6 +7,7 @@ module uart #(
     input logic [1:0] addrSelected,
     input logic writeEnable,
     input logic readEnable,
+
     input logic [7:0] dataWrite,
     input logic rxDataStream,
 
@@ -14,7 +15,6 @@ module uart #(
     output logic [7:0] dataRead,
     output logic txDataStream
 );
-    //Transmission control    
     logic txActive;
 
     //Parallel data from TX and RX
@@ -43,15 +43,27 @@ module uart #(
     logic [7:0] rxDataRead;
     logic [7:0] rxDataWrite;
 
-    logic busTxWrite;
-    logic [7:0] busTxData;
-    logic busRxRead;
+    //Read from RX once readEnable goes up
+    assign rxReadEnable = readEnable && (addrSelected == 2'b00);
 
-    assign busRxRead = readEnable && (addrSelected == 2'b00);
-    assign busTxWrite = writeEnable && (addrSelected == 2'b01);
-    assign busTxData = dataWrite;
+    //Once data goes through RX, push it to RX FIFO
+    assign rxWriteEnable = rxDataValid && !rxFull;
+    
+    //Drive interrupt when the RX FIFO is not empty
+    assign interrupt = !rxEmpty;
 
-    logic [7:0] txByteLatched;
+    //Write to FIFO one writeEnable goes up
+    assign txWriteEnable = writeEnable && (addrSelected == 2'b01) && !txFull;
+
+    //At the same cycle txWriteEnable goes up, write to FIFO
+    assign txDataWrite = dataWrite;
+
+    //Once FIFO is non-empty, let TX read
+    assign txDataValid = !txEmpty && !txActive;
+    assign txReadEnable = txDataValid;
+
+    //Connect the TX parallel data to the data output from FIFO
+    assign txByteData = txDataRead;
 
     always_comb 
         begin
@@ -59,7 +71,7 @@ module uart #(
             if (readEnable)
                 begin
                     case (addrSelected)
-                        2'b00: dataRead = (!rxEmpty) ? rxDataRead : 8'b0;
+                        2'b00: dataRead = rxDataRead;
                         2'b10: dataRead = {interrupt,
                                            1'b0,
                                            txFull,
@@ -67,58 +79,10 @@ module uart #(
                                            rxFull,
                                            rxEmpty,
                                            rxEmpty && !interrupt,
-                                           txFull};
+                                           txActive};
                         
                         default: dataRead = 8'b0;
                     endcase
-                end
-        end
-
-    always_ff @(posedge clock or posedge reset) 
-        begin
-            if (reset) 
-                begin
-                    rxReadEnable <= 0;
-                    txReadEnable <= 0;
-                    txWriteEnable <= 0;
-
-                    txByteLatched   <= 8'd0;
-                    txDataWrite <= 8'd0;
-
-                    interrupt <= 0;
-                end 
-            else 
-                begin
-                    rxReadEnable <= 0;
-                    txReadEnable <= 0;
-                    txWriteEnable <= 0;
-
-                    if (busTxWrite) 
-                        begin
-                            txWriteEnable <= 1;
-                            txDataWrite <= busTxData;
-                        end
-
-                    if (!txEmpty && !txActive) 
-                        begin
-                            txByteLatched   <= txDataRead;
-                            txReadEnable <= 1;
-                        end
-
-                    if ((rxWriteEnable || !rxEmpty) && !interrupt) 
-                        begin
-                            rxReadEnable <= 1;
-                        end
-
-                    if (rxReadEnable) 
-                        begin
-                            interrupt <= 1;
-                        end
-
-                    if (busRxRead) 
-                        begin
-                            interrupt <= 0;
-                        end
                 end
         end
 
@@ -127,7 +91,7 @@ module uart #(
     ) uart_rx_inst (
         .clock,
         .rxDataStream,
-        .rxDataValid(rxWriteEnable),
+        .rxDataValid(rxDataValid),
         .rxByteData(rxDataWrite)
     );
 
@@ -149,8 +113,8 @@ module uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_tx_inst (
         .clock,
-        .txDataValid(txReadEnable),
-        .txByteData(txByteLatched),
+        .txDataValid(txDataValid),
+        .txByteData(txByteData),
         .txActive,
         .txDataStream
     );
