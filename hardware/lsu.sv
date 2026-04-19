@@ -6,8 +6,7 @@ module lsu #(
     input logic [31:0] storeAddr,
     input logic [31:0] rs2,
     input logic [WIDTH - 1:0] dataRead,
-    input logic [2:0] funct3Load,
-    input logic [2:0] funct3Store,
+    input logic [2:0] funct3,
 
     output logic [31:0] storeData,
     output logic [31:0] loadData,
@@ -34,7 +33,7 @@ module lsu #(
 
     always @(*)
         begin
-            case(funct3Load)
+            case(funct3)
                 3'b000: loadData = {{24{loadByte[7]}}, loadByte};
                 3'b001: loadData = {{16{loadHalf[15]}}, loadHalf};
                 3'b100: loadData = {24'b0, loadByte};
@@ -50,7 +49,7 @@ module lsu #(
             storeData = 32'b0;
             storeMask = 4'b0000;
 
-            case (funct3Store)
+            case (funct3)
                 3'b000:
                     begin
                         storeData = {rs2[7:0], rs2[7:0], rs2[7:0], rs2[7:0]};
