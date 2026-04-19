@@ -16,6 +16,8 @@ module processor #(
     output logic [WIDTH - 1:0] dataWrite,
     output logic [3:0] bramWriteMask
 );
+    //NOP = addi zero, zero, 0, using add could have the same behavior,
+    //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
 
     //Program counter and different wires to drive different pc
@@ -79,8 +81,6 @@ module processor #(
 
     //Environment defined variables
     //################### IMPLEMENT #################################################
-
-    //CANNOT IMPLEMENT RIGHT NOW???
     logic d_isEBREAK, e_isEBREAK;
     logic d_isECALL, e_isECALL;
     logic d_isCSRRS, e_isCSRRS;
@@ -387,11 +387,11 @@ module processor #(
                                 de_pc <= fd_pc;
                                 de_instr <= d_effectiveInstr;
 
-                                de_loadAddr  = registerFile[d_rs1Id] + d_Iimm;
-                                de_storeAddr = registerFile[d_rs1Id] + d_Simm;
+                                de_loadAddr <= registerFile[d_rs1Id] + d_Iimm;
+                                de_storeAddr <= registerFile[d_rs1Id] + d_Simm;
 
-                                de_rs1 = registerFile[d_rs1Id];
-                                de_rs2 = registerFile[d_rs2Id];
+                                de_rs1 <= registerFile[d_rs1Id];
+                                de_rs2 <= registerFile[d_rs2Id];
 
 
                                 state <= EXECUTE;
@@ -536,20 +536,20 @@ module processor #(
     // `ifdef SIMULATION
     //     always @(posedge clock) 
     //         begin
-    //             $display("PC=%0d instr=%h", pc, instr);
+    //             $display("PC=%0d instr=%h", f_pc, d_instr);
     //             $display("Instruction opcode %b", dataRead[6:0]);
                 
     //             case (1'b1)
-    //                 isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
-    //                 isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
-    //                 isLoad:   $display("LOAD");
-    //                 isStore:  $display("STORE");
-    //                 isBranch: $display("BRANCH");
-    //                 isJAL:    $display("JAL");
-    //                 isJALR:   $display("JALR");
-    //                 isLUI:    $display("LUI");
-    //                 isAUIPC:  $display("AUIPC");
-    //                 isSYSTEM: $display("SYSTEM (EBREAK)");
+    //                 d_isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", d_rdId, d_rs1Id, d_rs2Id, d_funct3);
+    //                 d_isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", d_rdId, d_rs1Id, d_Iimm, d_funct3);
+    //                 d_isLoad:   $display("LOAD");
+    //                 d_isStore:  $display("STORE");
+    //                 d_isBranch: $display("BRANCH");
+    //                 d_isJAL:    $display("JAL");
+    //                 d_isJALR:   $display("JALR");
+    //                 d_isLUI:    $display("LUI");
+    //                 d_isAUIPC:  $display("AUIPC");
+    //                 d_isSYSTEM: $display("SYSTEM (EBREAK)");
     //             endcase
     //         end
     // `endif
