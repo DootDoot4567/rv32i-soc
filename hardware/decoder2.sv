@@ -41,6 +41,10 @@ module decoder(
     assign isStore  = (instr[6:0] == 7'b0100011);
     assign isSYSTEM = (instr[6:0] == 7'b1110011);
 
+    assign isEBREAK = isSYSTEM && (funct3 == 3'b000) && (instr[31:20] == 12'h001);
+    assign isECALL  = isSYSTEM && (funct3 == 3'b000) && (instr[31:20] == 12'h000);
+    assign isCSRRS  = isSYSTEM && (funct3 == 3'b010);
+
     //Assign bits registers and returning address
     assign rs1Id = instr[19:15];
     assign rs2Id = instr[24:20];
