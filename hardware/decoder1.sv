@@ -11,6 +11,9 @@ module decoder(
     output logic isLoad,
     output logic isStore,
     output logic isSYSTEM,
+    output logic isEBREAK,
+    output logic isCSRRS,
+    output logic isECALL,
 
     output logic [4:0] rs1Id,
     output logic [4:0] rs2Id,
