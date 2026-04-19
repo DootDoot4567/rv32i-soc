@@ -7,10 +7,17 @@ PACKAGE		?= tq144:4k
 PROGRAMMER	?= ./spi_flash_programmer.sh
 PCF_FILE	?= Go_Board_Constraints.pcf
 
+#Processor 1
 TOP			?= soc
 TOP_TB		?= soc_tb
 MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
 MODULES_TB	?= soc_tb.sv
+
+#Processor 2
+# TOP			?= soc
+# TOP_TB		?= soc_tb
+# MODULES		?= soc.sv processor2.sv bram_sdp.sv decoder.sv alu.sv lsu1.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+# MODULES_TB	?= soc_tb.sv
 
 # Use yosys to perform synthesis
 %.json : %.sv
