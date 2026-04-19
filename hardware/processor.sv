@@ -2,7 +2,8 @@ module processor #(
     parameter INIT = "",
     parameter WIDTH = 32,
     parameter DEPTH = 16384,
-    parameter ADDR_WIDTH = 14
+    parameter ADDR_WIDTH = 14,
+    parameter RESET_ADDRESS = 32'h00008000
 ) (
     input logic clock,
     input logic reset,
@@ -218,8 +219,8 @@ module processor #(
                             registerFile[i] <= 32'd0;
                         end
 
-                    pc <= 32'h00008000;
-                    addrRead <= 32'h00008000;
+                    pc <= RESET_ADDRESS;
+                    addrRead <= RESET_ADDRESS;
                     readEnable <= 1;  
 
                     writeEnable <= 0;  
