@@ -80,11 +80,9 @@ module processor #(
     logic [31:0] d_Jimm, e_Jimm;
 
     //Environment defined variables
-    //################### IMPLEMENT #################################################
     logic d_isEBREAK, e_isEBREAK;
     logic d_isECALL, e_isECALL;
     logic d_isCSRRS, e_isCSRRS;
-    //###############################################################################
 
     //Register fields from instruction decoding
     logic [31:0] de_rs1, de_rs2;
@@ -154,6 +152,9 @@ module processor #(
         .isLoad(d_isLoad),
         .isStore(d_isStore),
         .isSYSTEM(d_isSYSTEM),
+        .isEBREAK(d_isEBREAK),
+        .isECALL(d_isECALL),
+        .isCSRRS(d_isCSRRS),
         .rs1Id(d_rs1Id),
         .rs2Id(d_rs2Id),
         .rdId(d_rdId),
@@ -179,6 +180,9 @@ module processor #(
         .isLoad(e_isLoad),
         .isStore(e_isStore),
         .isSYSTEM(e_isSYSTEM),
+        .isEBREAK(e_isEBREAK),
+        .isECALL(e_isECALL),
+        .isCSRRS(e_isCSRRS),
         .rs1Id(e_rs1Id),
         .rs2Id(e_rs2Id),
         .rdId(e_rdId),
@@ -352,6 +356,8 @@ module processor #(
                 end
             else 
                 begin
+                    cycles <= cycles + 1;
+
                     case(state)
                         HALT: 
                             begin
@@ -394,7 +400,14 @@ module processor #(
                                 de_rs2 <= registerFile[d_rs2Id];
 
 
-                                state <= EXECUTE;
+                                if (e_isEBREAK) 
+                                    begin
+                                        state <= HALT;
+                                    end
+                                else
+                                    begin
+                                        state <= EXECUTE;
+                                    end 
                             end
                         EXECUTE: 
                             begin
@@ -438,8 +451,6 @@ module processor #(
                                     begin
                                         em_writeBackData <= 32'd0;
                                     end
-
-                                /////////////////////IMPLEMENT EBREAK 
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
@@ -472,8 +483,15 @@ module processor #(
 
                                 em_loadAddr <= de_loadAddr;
                                 em_instr <= e_effectiveInstr;
-                                
-                                state <= MEMORY;	          
+
+                                if (e_isEBREAK) 
+                                    begin
+                                        state <= HALT;
+                                    end
+                                else
+                                    begin
+                                        state <= MEMORY;
+                                    end          
                             end
                         MEMORY:
                             begin
