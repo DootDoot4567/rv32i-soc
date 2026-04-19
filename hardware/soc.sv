@@ -11,15 +11,11 @@ module soc #(
     output logic txDataStream
 );
     //Computes minimum bits needed for the mem addresses using log_2(depth)
-    // localparam ADDR_WIDTH = $clog2(DEPTH);
-    localparam ADDR_WIDTH = 32;
+    localparam ADDR_WIDTH = $clog2(DEPTH);
 
-    //Address offsets based on memory map declared in linker
-    localparam ROM_BASE = 32'h8000;
-    localparam RAM_BASE = 32'h0400;
-    localparam ROM_SIZE_BYTES = (32'h8000) * 4;
-    localparam RAM_SIZE_BYTES = (32'h8000 - 32'h0400) * 4;
-    localparam UART_BASE = 32'h0240;
+    //Address offsets based on memory map
+    localparam ROM_BASE = 32'h00008000;
+    localparam UART_BASE = 32'h0340;
     localparam UART_NUM_BYTES = 4;
 
     /////////
@@ -32,17 +28,24 @@ module soc #(
     logic [ADDR_WIDTH - 1:0] addrRead;
     logic [ADDR_WIDTH - 1:0] addrWrite;
     logic [WIDTH - 1:0] dataWrite;
-    logic [WIDTH - 1:0] busDataRead;
+    logic [WIDTH - 1:0] dataRead;
     logic [3:0] bramWriteMask;
 
     //Active Address
-    logic [ADDR_WIDTH - 1:0] activeAddr;
+    logic [ADDR_WIDTH - 1:0] address;
 
     //UART
     logic [1:0] uartAddr;
+
     logic uartInterrupt;
+    logic uartReadFire;
+    logic uartResponseValid;
+    logic uartRead;
+    logic uartWrite;
+
     logic [7:0] uartDataRead8;
     logic [7:0] uartDataWrite8;
+    logic [7:0] uartReadHold;
 
     //BRAM
     logic [ADDR_WIDTH - 1:0] bramAddrRead;
@@ -53,80 +56,85 @@ module soc #(
     logic uartSelected;
     logic bramSelected;
 
-    //Memory map signals
-    logic romSelected;
-    logic ramSelected;
-    logic romReadSelected;
-    logic ramReadSelected;
-    logic ramWriteSelected;
+    //Address for decoding (use read address if reading, write address if writing
+    assign address = readEnable ? addrRead : (writeEnable ? addrWrite : 'd0);
 
-    assign activeAddr = readEnable ? addrRead :
-                      writeEnable ? addrWrite : '0;
+    //If UART needs operation, select last 2 bits of either write or read addresses
+    assign uartAddr = uartRead ? addrRead[1:0] : uartWrite ? addrWrite[1:0] : 2'b00;
 
-    assign uartAddr = activeAddr[1:0]; 
+    //Select uart if read or write is high while enable signal also being high
+    assign uartSelected = (uartReadFire) || (uartWrite && writeEnable);
+    assign uartReadFire = uartRead && readEnable;
 
-    assign uartSelected = (activeAddr >= UART_BASE) &&
-                      (activeAddr < UART_BASE + UART_NUM_BYTES);
+    //Outside of IO region (Ideally).
+    //Most likely needs to be fixed to prevent writes to addresses below 0x400
+    assign bramSelected = !uartSelected;
 
-    assign bramSelected = !uartSelected && (romSelected || ramSelected);
+    //Need a UART read if the address to read is within device installation
+    assign uartRead =
+        (addrRead >= UART_BASE) &&
+        (addrRead < UART_BASE + UART_NUM_BYTES);
 
-    assign romSelected = (activeAddr >= ROM_BASE) && 
-                         (activeAddr < ROM_BASE + ROM_SIZE_BYTES);
-    assign ramSelected = (activeAddr >= RAM_BASE) &&
-                         (activeAddr < RAM_BASE + RAM_SIZE_BYTES);
+    //Need a UART write if the address to read is within device installation
+    assign uartWrite =
+        (addrWrite >= UART_BASE) &&
+        (addrWrite < UART_BASE + UART_NUM_BYTES);
 
-    assign romReadSelected = (addrRead >= ROM_BASE) &&
-                             (addrRead < ROM_BASE + ROM_SIZE_BYTES);
+    //Select last byte of the data written (from CPU)
+    assign uartDataWrite8 = dataWrite[7:0];
 
-    assign ramReadSelected = (addrRead >= RAM_BASE) &&
-                             (addrRead < RAM_BASE + RAM_SIZE_BYTES);
+    //Offset the addresses since the .mem file lives in ROM
+    assign bramAddrRead  = (addrRead  - ROM_BASE) >> 2;
+    assign bramAddrWrite = (addrWrite - ROM_BASE) >> 2;
 
-    assign ramWriteSelected = (addrWrite >= RAM_BASE) &&
-                              (addrWrite < RAM_BASE + RAM_SIZE_BYTES);
-
-    assign bramAddrRead = romSelected ? ((addrRead - ROM_BASE) >> 2) :
-                          ramSelected ? ((addrRead - RAM_BASE) >> 2) : '0;
-
-    assign bramAddrWrite = ramWriteSelected ? ((addrWrite - RAM_BASE) >> 2) : '0;
-    
-    always @(*)
+    always_ff @(posedge clock or posedge reset) 
         begin
-            case (addrWrite[1:0])
-                2'b00: uartDataWrite8 = dataWrite[7:0];
-                2'b01: uartDataWrite8 = dataWrite[15:8];
-                2'b10: uartDataWrite8 = dataWrite[23:16];
-                2'b11: uartDataWrite8 = dataWrite[31:24];
-                default: 
-                    begin
-                        uartDataWrite8 = 8'h00;
-                    end
-            endcase
+            if (reset) 
+                begin
+                    //If reset, do not respond or hold any data
+                    uartResponseValid <= 1'b0;
+                    uartReadHold  <= 8'h00;
+                end 
+            else 
+                begin
+                    //Creates a one cycle delay to keep data fed into UART stable
+                    //Do not hold any data by default
+                    uartResponseValid <= 1'b0;
+
+                    //If CPU reaches UART's read address and enable is up  
+                    if (uartReadFire) 
+                        begin
+                            //Hold read data byte for one cycle and respond
+                            uartReadHold  <= uartDataRead8;
+                            uartResponseValid <= 1'b1;
+                        end
+                end
         end
 
-    assign busDataRead = uartSelected ? {uartDataRead8, 
-                                         uartDataRead8, 
-                                         uartDataRead8, 
-                                         uartDataRead8} : bramDataRead;
+    assign dataRead = (uartReadFire || uartResponseValid) ? 
+        {uartReadHold, 
+         uartReadHold, 
+         uartReadHold, 
+         uartReadHold} : bramDataRead;
 
-    //Instatiate the processor
     processor #(
         .INIT(INIT),
         .WIDTH(WIDTH),
         .DEPTH(DEPTH),
-        .ADDR_WIDTH(ADDR_WIDTH)
+        .ADDR_WIDTH(ADDR_WIDTH),
+        .RESET_ADDRESS(ROM_BASE)
     ) processor_inst (
         .clock,
         .reset,
-        .dataRead(busDataRead),
+        .dataRead,
         .writeEnable,
         .readEnable,
-        .addrWrite,
         .addrRead,
+        .addrWrite,
         .dataWrite,
         .bramWriteMask
     );
 
-    //Instatiate the BRAM (simple dual port)
     bram_sdp #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH),
@@ -144,15 +152,14 @@ module soc #(
         .dataRead(bramDataRead)
     );
 
-    //Instantiate the UART (Top for both RX and TX)
     uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_inst (
         .clock,
         .reset,
         .addrSelected(uartAddr),
-        .writeEnable(writeEnable && uartSelected),
-        .readEnable(readEnable && uartSelected),
+        .writeEnable(uartWrite && writeEnable),
+        .readEnable(uartRead && readEnable),
         .dataWrite(uartDataWrite8),
         .rxDataStream,
         .interrupt(uartInterrupt),
