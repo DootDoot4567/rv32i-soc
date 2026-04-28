@@ -113,7 +113,7 @@ module processor #(
 
     //CSR Registers
     logic [63:0] cycles;
-    logic [63:0] instructionsRetired;
+    logic [63:0] instrRetired;
 
     //FSM states
     typedef enum {
@@ -281,11 +281,11 @@ module processor #(
                     end
                 12'hc02:
                     begin
-                        e_csrData = instructionsRetired[31:0];
+                        e_csrData = instrRetired[31:0];
                     end
                 12'hc82:
                     begin
-                        e_csrData = instructionsRetired[63:32];
+                        e_csrData = instrRetired[63:32];
                     end
 
                 default: e_csrData = 32'h0;
@@ -350,7 +350,7 @@ module processor #(
                     em_writeBackEnable <= 0; mw_writeBackEnable <= 0;
 
                     cycles <= 0;
-                    instructionsRetired <= 0;
+                    instrRetired <= 0;
 
                     state <= INITIAL;
                 end
@@ -400,7 +400,7 @@ module processor #(
                                 de_rs2 <= registerFile[d_rs2Id];
 
 
-                                if (e_isEBREAK) 
+                                if (d_isEBREAK) 
                                     begin
                                         state <= HALT;
                                     end
@@ -424,6 +424,7 @@ module processor #(
                                 else
                                     begin
                                         em_nextPc <= de_nextPc;
+                                        // em_nextPc <= f_pcPlus4;
                                     end
 
 
@@ -543,7 +544,7 @@ module processor #(
                                 //Stop writeback at next clock cycle
                                 mw_writeBackEnable <= 0;
 
-                                instructionsRetired <= instructionsRetired + 1;
+                                instrRetired <= instrRetired + 1;
 
                                 state <= FETCH;
                             end
