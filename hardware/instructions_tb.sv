@@ -24,7 +24,9 @@ module instructions_tb ();
         .INIT(MEMORY_INIT)
     ) soc_inst (
         .clock(clock),
-        .reset(reset)
+        .reset(reset),
+        .rxDataStream(),
+        .txDataStream()
     );
 
     // Helper methods
@@ -94,6 +96,9 @@ module instructions_tb ();
         // of the previous instruction
 
         // ====== Step-by-step checks (must match program_test.asm order) ======
+
+        // 0  LUI   x3, 0xffff9
+        // step(); expect_reg(3, 32'hffff9000, "lui x3, 0xffff9");
 
         // 0  LUI   x1, 0x12345
         step(); expect_reg(1, 32'h1234_5000, "lui x1, 0x12345");
