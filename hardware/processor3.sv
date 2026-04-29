@@ -37,7 +37,9 @@ module processor #(
     logic e_isLT;
 
     //Instruction register and its variants (bubbled)
-    logic [31:0] f_instr, fd_instr, de_instr, em_instr, mw_instr;
+    logic [31:0] f_instr, de_instr, em_instr, mw_instr;
+    //THIS CHANGE IS OKAY
+    //logic [31:0] fd_instr;
 
     //Read (BRAM & UART operation) registers (bubbled)
     logic f_readEnable, em_readEnable;
@@ -255,8 +257,11 @@ module processor #(
     );
     
     //Continously drive bubbled instructions
-    assign d_effectiveInstr = (fd_nop) ? NOP : fd_instr;
+    // assign d_effectiveInstr = (fd_nop) ? NOP : fd_instr;
+    //assign d_effectiveInstr = fd_instr;
+    assign d_effectiveInstr = f_instr;
     assign e_effectiveInstr = de_instr;
+    //assign d_effectiveInstr = (flushDecode) ? NOP : f_instr;
     //assign e_effectiveInstr = (flushExecute) ? NOP : de_instr;
     assign m_effectiveInstr = em_instr;
     assign w_effectiveInstr = mw_instr;
@@ -276,8 +281,8 @@ module processor #(
     assign f_pcPlus4 = f_pc + 4;
 
     assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
-    assign addrRead = em_readEnable ? em_addrRead : (f_readEnable ? f_addrRead : 0);
-
+    assign addrRead = em_readEnable ? em_loadAddr : (f_readEnable ? f_addrRead : 0);
+    
     //Continously drive external BRAM signals using EXEC -> MEM signals
     assign writeEnable = em_writeEnable;
     //assign addrWrite = em_addrWrite;
@@ -331,9 +336,9 @@ module processor #(
     assign em_readEnable = em_isLoad;
     assign em_writeEnable = em_isStore;
 
-    //assign f_addrRead = f_pc;
+    assign f_addrRead = f_pc;
     assign f_readEnable = !stallFetch;
-    assign f_addrRead = (state == INITIAL) ? RESET_ADDRESS : f_pc;
+    //assign f_addrRead = (state == INITIAL) ? RESET_ADDRESS : f_pc;
     //assign f_readEnable = (state == INITIAL || state == RUN) && !stallFetch;
 
     // assign em_addrRead = de_loadAddr;
@@ -391,12 +396,13 @@ module processor #(
                             registerFile[i] <= 32'd0;
                         end
 
-                    f_pc <= 0; fd_pc <= 0; de_pc <= 0;
+                    f_pc <= RESET_ADDRESS; fd_pc <= 0; de_pc <= 0;
                     fd_nextPc <= 0; de_nextPc <= 0; em_nextPc <= 0; mw_nextPc <= 0; 
 
                     de_pcPlusImm <= 0;
 
-                    fd_instr <= NOP; de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
+                    // fd_instr <= NOP; 
+                    de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
 
                     de_rs1 <= 0; de_rs2 <= 0;                    
 
@@ -456,37 +462,56 @@ module processor #(
 
                                 //Calculate Branch, JAL and AUIPC targets here
                                 //PC value + immediate based on isTYPE flags
-                                if (!stallFetch && !em_readEnable)
-                                    begin
-                                        fd_instr <= f_instr;
-                                        fd_pc <= f_pc;
-                                        fd_nop <= flushDecode;
-                                    end
-                                else
-                                    begin
-                                        fd_nop <= fd_nop;
-                                        fd_instr <= fd_instr;
-                                        fd_pc <= fd_pc;
-                                    end
-
-                                // if (f_readEnable)
+                                // if (!stallFetch && !em_readEnable)
                                 //     begin
-                                
                                 //         fd_instr <= f_instr;
-                                //         fd_nextPc <= f_pcPlus4;
                                 //         fd_pc <= f_pc;
                                 //         fd_nop <= flushDecode;
                                 //     end
                                 // else
                                 //     begin
-                                //         //f_pc <= f_pcPlus4;
                                 //         fd_nop <= fd_nop;
                                 //         fd_instr <= fd_instr;
-                                //         fd_nextPc <= f_pcPlus4;
                                 //         fd_pc <= fd_pc;
                                 //     end
 
-                                if (!stallDecode)
+                                if (f_readEnable)
+                                    begin
+                                        //fd_nop <= 0;
+                                        // fd_instr <= f_instr;
+                                        fd_nextPc <= f_pcPlus4;
+                                        fd_pc <= f_pc;
+                                        fd_nop <= flushDecode;
+                                    end
+                                else
+                                    begin
+                                        //f_pc <= f_pcPlus4;
+                                        fd_nop <= fd_nop;
+                                        // fd_instr <= fd_instr;
+                                        fd_nextPc <= f_pcPlus4;
+                                        fd_pc <= fd_pc;
+                                    end
+
+                                // if (flushDecode) 
+                                //     begin
+                                //         fd_instr <= NOP;
+                                //         fd_nop   <= 1;
+                                //     end
+
+                                if (flushExecute) 
+                                    begin
+                                        de_pc <= 0;
+                                        de_pcPlusImm <= 0;
+                                        de_instr <= NOP;
+                                        de_nextPc <= 0;
+
+                                        de_loadAddr <= 0;
+                                        de_storeAddr <= 0;
+
+                                        de_rs1 <= 0;
+                                        de_rs2 <= 0;
+                                    end
+                                else if (!stallDecode)
                                     begin
                                         de_pc <= fd_pc;
                                         de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm : (d_isAUIPC ? d_Uimm : d_Bimm));
@@ -503,6 +528,10 @@ module processor #(
 
                                 //Compute values for the writeback and the next program counter
 
+                                // if (controlHazard)
+                                //     begin
+                                //         f_pc <= 0;
+                                //     end
                                 if ((e_isBranch && e_takeBranch) ||  e_isJAL)
                                     begin
                                         f_pc <= de_pcPlusImm;
@@ -511,16 +540,18 @@ module processor #(
                                     begin
                                         f_pc <= e_pcJALR;
                                     end
-                                else
+                                // else
+                                //     begin
+                                //         f_pc <= f_pcPlus4;
+                                //     end
+                                else if (!stallFetch) 
                                     begin
                                         f_pc <= f_pcPlus4;
                                     end
-                                // else if (!stallFetch) begin
-                                //     f_pc <= f_pcPlus4;
-                                // end
-                                // else begin
-                                //     f_pc <= f_pc;
-                                // end
+                                else 
+                                    begin
+                                        f_pc <= f_pc;
+                                    end
 
                                 // if (controlHazard)
                                 //     begin
@@ -629,7 +660,7 @@ module processor #(
                                 mw_funct3 <= em_funct3;
 
                                 mw_isLoad <= em_isLoad;
-                                mw_loadAddr <= em_loadAddr;
+                                mw_isStore <= em_isStore;
                                 mw_isBranch <= em_isBranch;
 
                                 mw_nextPc <= em_nextPc;
