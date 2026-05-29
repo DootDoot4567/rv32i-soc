@@ -546,11 +546,40 @@ module processor #(
 
                                 instrRetired <= instrRetired + 1;
 
+                                // $display("%h", w_effectiveInstr);
+
                                 state <= FETCH;
                             end
                     endcase
                 end
         end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset) begin
+    //         if (mw_isLoad && mw_rdId != 0 && mw_loadAddr >= 32'h81e0 && mw_loadAddr <= 32'h81f0) begin
+    //             $display("LSU_WB cyc=%0d | mw_loadAddr=%h mw_funct3=%b dataRead=%h w_loadData=%h mw_rdId=x%0d de_pc=%h",
+    //                 cycles,
+    //                 mw_loadAddr,
+    //                 mw_funct3,
+    //                 dataRead,
+    //                 w_loadData,
+    //                 mw_rdId,
+    //                 de_pc
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == WRITE_BACK && mw_isLoad && de_pc >= 32'h816c) begin
+    //         $display("MEM cyc=%0d type=LOAD addr=%h data=%h pc=%h",
+    //             cycles,
+    //             mw_loadAddr,
+    //             w_loadData,
+    //             de_pc
+    //         );
+    //     end
+    // end
 
     // `ifdef SIMULATION
     //     always @(posedge clock) 
