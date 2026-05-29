@@ -126,10 +126,16 @@ module processor #(
     logic stallDecode;
 
     //Hazard signals
-    //logic de_conflict, dm_conflict, dw_conflict, 
-    logic fm_conflict, fw_conflict;
-    logic e_writesRd, m_writesRd, w_writesRd;
-    logic d_emw_conflict;
+    logic rs1Conflict;
+    logic rs2Conflict;
+
+    logic d_readsRs1;
+    logic d_readsRs2;
+
+    logic e_writesRd;
+    logic m_writesRd;
+    logic w_writesRd;
+
     logic controlHazard;
     logic structuralHazard;
     logic dataHazard;
