@@ -134,7 +134,14 @@ module processor #(
     logic structuralHazard;
     logic dataHazard;
 
-    //logic [31:0] mw_memData; //, memData;
+    //Prefetch buffer signals
+    logic prefetchReset;
+    logic prefetchFull;
+    logic prefetchEmpty;
+    logic prefetchWriteEnable;
+    logic prefetchReadEnable;
+    logic [63:0] prefetchDataWrite;
+    logic [63:0] prefetchDataRead;
 
     //FSM states
     typedef enum {
