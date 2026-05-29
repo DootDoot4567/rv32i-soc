@@ -162,8 +162,17 @@ module processor #(
     logic [63:0] prefetchDataWrite;
     logic [63:0] prefetchDataRead;
 
-    //signal that validates the contents of decode
+    //Signal that validates the contents of decode
     logic decodeIsValid;
+
+    //Forwarded registers
+    logic [31:0] e_rs1Forwarded;
+    logic [31:0] e_rs2Forwarded;
+
+    //Registers used to compute writeback faster and used by forwarder module 
+    logic [31:0] e_result;
+    logic [31:0] e_rs1;
+    logic [31:0] e_rs2;
 
     //FSM states
     typedef enum {
@@ -254,8 +263,8 @@ module processor #(
 
     //Instantiate the alu (purely combinatorial)
     alu alu_inst (
-        .rs1(de_rs1),
-        .rs2(de_rs2),
+        .rs1(e_rs1Forwarded),
+        .rs2(e_rs2Forwarded),
         .instr(e_effectiveInstr),
         .isALUreg(e_isALUreg),
         .isALUimm(e_isALUimm),
@@ -287,7 +296,7 @@ module processor #(
     ) lsu_inst (
         .loadAddr(w_loadAddr),
         .storeAddr(e_storeAddr),
-        .rs2(de_rs2),
+        .rs2(e_rs2Forwarded),
         .dataRead(dataRead),
         .funct3Load(mw_funct3),
         .funct3Store(e_funct3),
@@ -309,6 +318,22 @@ module processor #(
         .dataWrite(prefetchDataWrite),
         .empty(prefetchEmpty),
         .full(prefetchFull)
+    );
+
+    //Instantiate register forwarder (purely combinational)
+    reg_forwarder forwarder_inst (
+        .e_rs1Id(e_rs1Id),
+        .e_rs2Id(e_rs2Id),
+        .de_rs1(de_rs1),
+        .de_rs2(de_rs2),
+        .em_rdId(em_rdId),
+        .em_writeBackData(em_writeBackData),
+        .em_writesRd(m_writesRd),
+        .mw_rdId(mw_rdId),
+        .wb_writeData(mw_isLoad ? w_loadData : mw_writeBackData),
+        .mw_writesRd(w_writesRd),
+        .e_rs1Forwarded(e_rs1Forwarded),
+        .e_rs2Forwarded(e_rs2Forwarded)
     );
     
     //Continously drive bubbled instructions
@@ -361,7 +386,7 @@ module processor #(
     assign structuralHazard = em_readEnable || em_writeEnable;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard || prefetchFull;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLoad;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
@@ -377,6 +402,24 @@ module processor #(
     assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
+
+    always_comb begin
+        case (1)
+            e_isALUreg,
+            e_isALUimm: e_result = e_aluOut;
+
+            e_isJAL,
+            e_isJALR:   e_result = de_pc + 4;
+
+            e_isLUI:    e_result = e_Uimm;
+
+            e_isAUIPC:  e_result = de_pcPlusImm;
+
+            e_isCSRRS:  e_result = e_csrData;
+
+            default:    e_result = 32'd0;
+        endcase
+    end
 
     always_comb 
         begin
@@ -562,30 +605,7 @@ module processor #(
                                         f_pc <= f_pc + 4;
                                     end
 
-                                if (e_isALUreg || e_isALUimm)
-                                    begin
-                                        em_writeBackData <= e_aluOut;
-                                    end
-                                else if (e_isJAL || e_isJALR) 
-                                    begin
-                                        em_writeBackData <= de_pc + 4;
-                                    end
-                                else if (e_isLUI)
-                                    begin
-                                        em_writeBackData <= e_Uimm;
-                                    end
-                                else if (e_isAUIPC)
-                                    begin 
-                                        em_writeBackData <= de_pcPlusImm;
-                                    end
-                                else if (e_isCSRRS)
-                                    begin
-                                        em_writeBackData <= e_csrData;
-                                    end
-                                else
-                                    begin
-                                        em_writeBackData <= 32'd0;
-                                    end
+                                em_writeBackData <= e_result;
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
@@ -655,21 +675,5 @@ module processor #(
                     endcase
                 end
         end
-
-    always_ff @(posedge clock) begin
-        if (!reset && state == RUN) begin
-            if (mw_isLoad && mw_rdId != 0 && mw_loadAddr >= 32'h81e0 && mw_loadAddr <= 32'h81f0) begin
-                $display("LSU_WB cyc=%0d | mw_loadAddr=%h mw_funct3=%b dataRead=%h w_loadData=%h mw_rdId=x%0d de_pc=%h",
-                    cycles,
-                    mw_loadAddr,
-                    mw_funct3,
-                    dataRead,
-                    w_loadData,
-                    mw_rdId,
-                    de_pc
-                );
-            end
-        end
-    end
 
 endmodule
