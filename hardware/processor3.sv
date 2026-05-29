@@ -256,6 +256,21 @@ module processor #(
         .storeMask(e_storeMask)
     );
     
+    //Instantiate the fifo (the prefetch buffer)
+    fifo #(
+        .DEPTH(16),
+        .WIDTH(64)
+    ) fifo_inst (
+        .clock,
+        .reset(prefetchReset),
+        .writeEnable(prefetchWriteEnable),
+        .readEnable(prefetchReadEnable),
+        .dataRead(prefetchDataRead),
+        .dataWrite(prefetchDataWrite),
+        .empty(prefetchEmpty),
+        .full(prefetchFull)
+    );
+
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
     assign e_effectiveInstr = de_instr;
