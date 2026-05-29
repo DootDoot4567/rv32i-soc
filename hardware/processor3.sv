@@ -347,19 +347,20 @@ module processor #(
     always_comb 
         begin
             if ((e_isBranch && e_takeBranch) || e_isJAL)
-                f_nextPc = de_pcPlusImm;
+                begin
+                    f_nextPc = de_pcPlusImm;
+                end
             else if (e_isJALR)
-                f_nextPc = e_pcJALR;
-            else if (!stallFetch)
-                f_nextPc = f_pc + 4;
+                begin
+                    f_nextPc = e_pcJALR;
+                end
             else
-                f_nextPc = f_pc;
+                begin
+                    f_nextPc = f_pc;
+                end
         end
-    
-    // logic f_kill_response;
 
-
-    always @(*)
+    always_comb
         begin
             case (e_Iimm[11:0])
                 12'hc00:
@@ -383,7 +384,7 @@ module processor #(
             endcase
         end
 
-    always @(*)
+    always_comb
         begin
             //Branch decision logic 
             case(e_funct3)
@@ -399,7 +400,7 @@ module processor #(
             endcase
         end
 
-    //Reset control
+    //Reset control + FSM
     always_ff @(posedge clock)
         begin
             if (reset)
@@ -410,23 +411,16 @@ module processor #(
                         end
 
                     f_pc <= RESET_ADDRESS; fd_pc <= 0; de_pc <= 0;
-                    f_addrRead <=  RESET_ADDRESS;
-                    // f_kill_response <= 0;
 
                     de_pcPlusImm <= 0;
 
-                    // fd_instr <= NOP; 
-                    de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
+                    fd_instr <= NOP; de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
 
                     de_rs1 <= 0; de_rs2 <= 0;                    
 
                     de_loadAddr <= 0; em_loadAddr <= 0; mw_loadAddr <= 0;
                     de_storeAddr <= 0; em_storeAddr <= 0; mw_storeAddr <= 0;
                     em_dataWrite <= 0;
-
-                    //f_addrRead <= 0; em_addrRead <= 0;
-                    //f_readEnable <= 0; em_readEnable <= 0;  
-                    // fd_nop <= 1;
 
                     em_rdId <= 0; mw_rdId <= 0;
                     em_funct3 <= 0; mw_funct3 <= 0;
@@ -435,24 +429,23 @@ module processor #(
                     em_isStore <= 0; mw_isStore <= 0;
                     em_isBranch <= 0; mw_isBranch <= 0;
 
-                    // em_writeEnable <= 0;
-                    // em_dataRead <= 0;
-                    // em_addrWrite <= 0;
-                    // em_dataWrite <= 0;
                     em_storeMask <= 0;
-
                     em_writeBackData <= 0; mw_writeBackData <= 0;
-                    // em_writeBackEnable <= 0; mw_writeBackEnable <= 0;
-                    f_readEnable <= 1;
 
                     cycles <= 0;
                     instrRetired <= 0;
+        
+                    decodeIsValid <= 0;
+                    capturedReqPc <= RESET_ADDRESS;
+                    mem_resp_state <= NOTHING;
 
                     state <= INITIAL;
                 end
             else 
                 begin
                     cycles <= cycles + 1;
+
+                    // $display("%h", dataRead);
 
                     case(state)
                         HALT: 
@@ -462,13 +455,10 @@ module processor #(
                         INITIAL:
                             begin
                                 f_pc <= RESET_ADDRESS;
-                                f_addrRead <=  RESET_ADDRESS;
-                                f_readEnable <= 1;
-                                //f_addrRead <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
-                                // de_pc <= RESET_ADDRESS;
-
-                                // f_readEnable <= 1; 
+                                capturedReqPc <= RESET_ADDRESS;
+                                decodeIsValid <= 0;
+                                mem_resp_state <= NOTHING;
 
                                 state <= RUN;
                             end
