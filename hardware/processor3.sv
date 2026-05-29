@@ -474,86 +474,30 @@ module processor #(
                             end
                         RUN:
                             begin
-                                f_readEnable <= !stallFetch;
-                                //Schedule readEnable to go down at posedge of next clock cycle
-                                //f_readEnable <= 0;
-
-                                // if (controlHazard)
-                                //     f_kill_response <= 1'b1;
-                                // else if (f_readEnable)
-                                //     f_kill_response <= 1'b0;
-
-                                // if (f_readEnable && f_kill_response) begin
-                                //     $display(
-                                //         "FD_KILL cyc=%0d | f_pc=%h fd_pc=%h d_instr=%h flushD=%b ctrl=%b",
-                                //         cycles, f_pc, fd_pc, d_instr, flushDecode, controlHazard
-                                //     );
-                                // end
-
-                                //Calculate Branch, JAL and AUIPC targets here
-                                //PC value + immediate based on isTYPE flags
-                                // if (!stallFetch && !em_readEnable)
-                                //     begin
-                                //         fd_instr <= d_instr;
-                                //         fd_pc <= f_pc;
-                                //         fd_nop <= flushDecode;
-                                //     end
-                                // else
-                                //     begin
-                                //         fd_nop <= fd_nop;
-                                //         fd_instr <= fd_instr;
-                                //         fd_pc <= fd_pc;
-                                //     end
-
-                                // if (f_readEnable)
-                                //     begin
-                                //         //fd_nop <= 0;
-                                //         //fd_instr <= (fd_nop) ? NOP : d_instr;
-                                //         // fd_instr <= d_instr;
-                                //         fd_instr <= flushDecode ? NOP : d_instr;
-                                //         //fd_nextPc <= f_pcPlus4;
-                                //         fd_pc <= f_pc;
-                                //         fd_nop <= flushDecode;
-                                //     end
-                                // else
-                                //     begin
-                                //         //f_pc <= f_pcPlus4;
-                                //         fd_nop <= fd_nop;
-                                //         fd_instr <= fd_instr;
-                                //         //fd_nextPc <= f_pcPlus4;
-                                //         fd_pc <= fd_pc;
-                                //     end
-
-                                if (flushDecode)
+                                //Schedule readEnable to go down for a fetch if load will and is occuring
+                                if (f_readEnable && !em_readEnable)
                                     begin
-                                        //fd_instr <= NOP;
-                                        fd_pc <= fd_pc;
-                                        // fd_nop <= 1'b1;
-                                        // f_prev_pc <= f_pc;
+                                        mem_resp_state <= FETCH;
+                                        capturedReqPc <= f_addrRead;
                                     end
-                                // else if (stallDecode)
-                                //     begin
-                                //         fd_instr <= fd_instr;
-                                //         fd_pc <= fd_pc;
-                                //         fd_nop <= fd_nop;
-                                //     end
-                                //else if (f_readEnable && !f_kill_response)
-                                // else if (!stallFetch)
-                                else if (f_readEnable)
+                                else if (em_readEnable)
                                     begin
-                                        f_pc <= f_nextPc;
-                                        f_addrRead <= f_nextPc;
-                                        // fd_instr <= d_instr;
-                                        // f_prev_pc <= f_pc;
-                                        fd_pc <= f_pc;
-                                        // fd_nop <= 0;
+                                        mem_resp_state <= LOAD;
                                     end
                                 else
                                     begin
-                                        // fd_nop <= 1;
-                                        //fd_instr <= NOP;
-                                        fd_pc <= fd_pc;
-                                        // f_prev_pc <= f_pc;
+                                        mem_resp_state <= NOTHING;
+                                    end
+
+                                if (prefetchReadEnable)
+                                    begin
+                                        fd_instr <= prefetchDataRead[31:0];
+                                        fd_pc <= prefetchDataRead[63:32];
+                                        decodeIsValid <= 1;
+                                    end
+                                else if (!stallDecode || flushDecode)
+                                    begin
+                                        decodeIsValid <= 0;
                                     end
 
                                 if (flushExecute) 
