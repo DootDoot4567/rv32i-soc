@@ -558,7 +558,7 @@ module processor #(
 
                                 if (flushExecute) 
                                     begin
-                                        de_pc <= 0;
+                                        de_pc <= de_pc;
                                         de_pcPlusImm <= 0;
                                         de_instr <= NOP;
 
