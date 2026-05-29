@@ -143,6 +143,9 @@ module processor #(
     logic [63:0] prefetchDataWrite;
     logic [63:0] prefetchDataRead;
 
+    //signal that validates the contents of decode
+    logic decodeIsValid;
+
     //FSM states
     typedef enum {
         HALT,
