@@ -16,17 +16,31 @@ module processor #(
     output logic [WIDTH - 1:0] dataWrite,
     output logic [3:0] bramWriteMask
 );
-    //NOP = addi zero, zero, 0, using add could have the same behavior,
+    //Constants
+
+    //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
 
-    //Program counter and different wires to drive different pc
-    //values at different states
-    logic [31:0] f_pc, fd_pc, de_pc;
-    // logic [31:0] fd_nextPc, de_nextPc, em_nextPc, mw_nextPc;
-    logic [31:0] f_pcPlus4;
+    //Program counters
+
+    //address being requested this cycle
+    logic [31:0] f_pc;
+
+    //pipelined registers holding the pc at DE and EXEC states
+    logic [31:0] fd_pc, de_pc;
+
+    //next pc after branch/jump resolution
+    logic [31:0] f_nextPc;
+
+    //branch, jump or auipc targets computed in DE state
     logic [31:0] de_pcPlusImm;
+
+    //JALR target from alu
     logic [31:0] e_pcJALR;
+
+    //pc value from last fetch request
+    logic [31:0] capturedReqPc;
 
     //Flag to decide to branch or not
     logic e_takeBranch;
@@ -37,9 +51,7 @@ module processor #(
     logic e_isLT;
 
     //Instruction register and its variants (bubbled)
-    logic [31:0] d_instr, de_instr, em_instr, mw_instr;
-    //THIS CHANGE IS OKAY
-    // logic [31:0] fd_instr;
+    logic [31:0] fd_instr, de_instr, em_instr, mw_instr;
 
     //Read (BRAM & UART operation) registers (bubbled)
     logic f_readEnable, em_readEnable;
@@ -100,7 +112,6 @@ module processor #(
 
     //Writeback data and its states
     logic [31:0] em_writeBackData, mw_writeBackData;
-    //logic em_writeBackEnable, mw_writeBackEnable;
     logic writeBackEnable;
 
     //Computed memory address for loads and stores
