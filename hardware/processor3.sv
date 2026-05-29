@@ -257,92 +257,68 @@ module processor #(
     );
     
     //Continously drive bubbled instructions
-    // assign d_effectiveInstr = (fd_nop) ? NOP : fd_instr;
-    //assign d_effectiveInstr = fd_instr;
-    assign d_effectiveInstr = d_instr;
+    assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
     assign e_effectiveInstr = de_instr;
-    // assign d_effectiveInstr = (flushDecode) ? NOP : d_instr;
-    // assign e_effectiveInstr = (flushExecute) ? NOP : de_instr;
     assign m_effectiveInstr = em_instr;
     assign w_effectiveInstr = mw_instr;
                   
     //Continously drive the target memory address (used by loads and stores)
     assign w_loadAddr = mw_loadAddr;
     assign e_storeAddr = de_storeAddr;
- 
-    //Continously drive the data read from BRAM 
-    // assign memData = dataRead;
-    assign d_instr = dataRead;
 
-    // assign d_instr = instrPrefetched;
-    // assign d_pc = pcPrefetched;
-
-    //Continously drive the value of the pc for next instruction
-    assign f_pcPlus4 = f_pc + 4;
+    //fetch readEnable and address are computed combinatorially
+    assign f_readEnable = !stallFetch;
+    assign f_addrRead = controlHazard ? f_nextPc : f_pc;
 
     assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
     assign addrRead = em_readEnable ? em_loadAddr : f_addrRead;
     
     //Continously drive external BRAM signals using EXEC -> MEM signals
     assign writeEnable = em_writeEnable;
-    //assign addrWrite = em_addrWrite;
     assign addrWrite = em_storeAddr;
     assign dataWrite = em_dataWrite;
 
     //Continously drive the mask for a store to BRAM
     assign bramWriteMask = em_storeMask; 
 
-    logic rs1Conflict;
-    logic rs2Conflict;
-    logic fd_nop;
+    assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
+    assign d_readsRs2 = decodeIsValid && (d_isALUreg || d_isBranch || d_isStore);
 
-    logic d_readsRs1;
-    logic d_readsRs2;
-
-    assign d_readsRs1 = !fd_nop && !(d_isJAL || d_isAUIPC || d_isLUI);
-    assign d_readsRs2 = !fd_nop && (d_isALUreg || d_isBranch || d_isStore);
-
-    assign e_writesRd = !e_isStore && !e_isBranch;
-    assign m_writesRd = !em_isStore && !em_isBranch;
-    assign w_writesRd = !mw_isStore && !mw_isBranch;
-    // assign w_writesRd =
-    // (w_effectiveInstr != NOP) &&
-    // !mw_isStore &&
-    // !mw_isBranch &&
-    // (mw_rdId != 5'd0);
-
-    //assign writeBackEnable = w_writesRd;
+    assign e_writesRd = (e_effectiveInstr != NOP) && !e_isStore && !e_isBranch;
+    assign m_writesRd = (m_effectiveInstr != NOP) && !em_isStore && !em_isBranch;
+    assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isStore && !mw_isBranch;
 
     assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && 
-                        ((d_rs1Id == e_rdId && e_writesRd) || 
-                         (d_rs1Id == em_rdId && m_writesRd) ||
-                         (d_rs1Id == mw_rdId && w_writesRd));
+                        (((d_rs1Id == e_rdId) && e_writesRd) || 
+                         ((d_rs1Id == em_rdId) && m_writesRd) ||
+                         ((d_rs1Id == mw_rdId) && w_writesRd));
 
     assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && 
-                        ((d_rs2Id == e_rdId && e_writesRd) || 
-                         (d_rs2Id == em_rdId && m_writesRd) ||
-                         (d_rs2Id == mw_rdId && w_writesRd));
-
-    assign fm_conflict = (em_isLoad || em_isStore);
-    assign fw_conflict = mw_isLoad;
+                        (((d_rs2Id == e_rdId) && e_writesRd) || 
+                         ((d_rs2Id == em_rdId )&& m_writesRd) ||
+                         ((d_rs2Id == mw_rdId) && w_writesRd));
 
     assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch);
-    assign structuralHazard = fm_conflict || fw_conflict;
+    assign structuralHazard = em_readEnable || em_writeEnable;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLoad;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
     assign flushExecute = controlHazard || dataHazard;
 
     assign writeBackEnable = w_writesRd && mw_rdId != 0;
-    assign fd_nop = f_readEnable;
 
     assign em_readEnable = em_isLoad;
     assign em_writeEnable = em_isStore;
 
-    logic [31:0] f_nextPc;
+    assign prefetchReset = flushDecode || reset;
+
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
+    assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
+
+    assign prefetchDataWrite   = {capturedReqPc, dataRead};
 
     always_comb 
         begin
