@@ -584,41 +584,21 @@ module processor #(
 
                                 //Compute values for the writeback and the next program counter
 
-                                // if (controlHazard && ((e_isBranch && (e_takeBranch === 1'b1)) || e_isJAL))
-                                //     begin
-                                //         f_pc <= de_pcPlusImm;
-                                //     end
-                                // // else if (e_isJALR)
-                                // else if (controlHazard && e_isJALR)
-                                //     begin
-                                //         f_pc <= e_pcJALR;
-                                //     end
-                                // else
-                                //     begin
-                                //         f_pc <= f_pcPlus4;
-                                //     end
-                                // else if (!stallFetch) 
-                                //     begin
-                                //         //f_pc <= f_addrRead;
-                                //         f_pc <= f_pcPlus4;
-                                //     end
-                                // else 
-                                //     begin
-                                //         f_pc <= f_pc;
-                                //     end
-
-                                // if (controlHazard)
-                                //     begin
-                                //         f_pc <= de_pcPlusImm;
-                                //     end
-                                // else if (!stallFetch)
-                                //     begin
-                                //         f_pc <= f_pcPlus4;
-                                //     end
-                                // else
-                                //     begin
-                                //         f_pc <= f_pc;
-                                //     end
+                                 if (controlHazard)
+                                    begin
+                                         if (f_readEnable && !em_readEnable)
+                                            begin
+                                                f_pc <= f_nextPc + 4;
+                                            end
+                                        else
+                                            begin
+                                                f_pc <= f_nextPc;
+                                            end
+                                    end
+                                else if (f_readEnable)
+                                    begin
+                                        f_pc <= f_pc + 4;
+                                    end
 
                                 if (e_isALUreg || e_isALUimm)
                                     begin
@@ -647,43 +627,11 @@ module processor #(
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
-                                // if (e_isLoad) 
-                                //     begin
-                                //         em_readEnable <= 1;
-                                //         em_addrRead <= de_loadAddr;
-                                //     end
-                                // else if (e_isStore) 
-                                //     begin
-                                //         em_addrWrite <= de_storeAddr;
-                                //         em_dataWrite <= e_storeData;
-                                //         em_storeMask <= e_storeMask;
-                                //         em_writeEnable <= 1;
-                                //     end
 
                                 em_loadAddr <= de_loadAddr;
                                 em_storeAddr <= de_storeAddr;
                                 em_dataWrite <= e_storeData;
                                 em_storeMask <= e_storeMask;
-
-                                // if (e_isALUreg || e_isALUimm)
-                                //     begin
-                                //         if (e_effectiveInstr != NOP)
-                                //             begin
-                                //                 em_writeBackEnable <= 1;
-                                //             end
-                                //         else
-                                //             begin
-                                //                 em_writeBackEnable <= 0;
-                                //             end
-                                //     end
-                                // else 
-                                //     begin
-                                //         em_writeBackEnable <= (e_isJAL ||
-                                //                                e_isJALR ||
-                                //                                e_isLUI ||
-                                //                                e_isAUIPC ||
-                                //                                e_isCSRRS);
-                                //     end    
 
                                 em_rdId <= e_rdId;
                                 em_funct3 <= e_funct3;
@@ -692,21 +640,15 @@ module processor #(
                                 em_isStore <= e_isStore;
                                 em_isBranch <= e_isBranch;
 
-                                // em_loadAddr <= de_loadAddr;
                                 em_instr <= e_effectiveInstr;
-
-                                //Schedule a writeback by driving writeBackEnable for one cycle
-                                // mw_writeBackEnable <= em_writeBackEnable;
 
                                 //Stop reading or writing at the WB state
                                 if (em_isLoad)
                                     begin
-                                        //em_readEnable <= 0;
                                         mw_loadAddr <= em_loadAddr;
                                     end
                                 else if (em_isStore)
                                     begin
-                                        //em_writeEnable <= 0;
                                         mw_storeAddr <= em_storeAddr;
                                     end
 
@@ -716,8 +658,6 @@ module processor #(
                                 mw_isLoad <= em_isLoad;
                                 mw_isStore <= em_isStore;
                                 mw_isBranch <= em_isBranch;
-
-                                // mw_nextPc <= em_nextPc;
 
                                 mw_writeBackData <= em_writeBackData;
 
