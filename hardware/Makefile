@@ -20,10 +20,22 @@ PCF_FILE	?= Go_Board_Constraints.pcf
 # MODULES_TB	?= soc_tb.sv
 
 #Processor 3
+# TOP			?= soc
+# TOP_TB		?= soc_tb
+# MODULES		?= soc.sv processor3.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+# MODULES_TB	?= soc_tb.sv
+
+#Processor 4
 TOP			?= soc
 TOP_TB		?= soc_tb
-MODULES		?= soc.sv processor3.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+MODULES		?= soc.sv processor4.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
 MODULES_TB	?= soc_tb.sv
+
+#Processor 5
+# TOP			?= soc
+# TOP_TB		?= soc_tb
+# MODULES		?= soc.sv processor5.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
+# MODULES_TB	?= soc_tb.sv
 
 # Use yosys to perform synthesis
 %.json : %.sv
