@@ -143,8 +143,18 @@ module processor #(
         RUN
     } state_t;
 
-    //Declaring the state to start at INITIAL when there is a reset signal
+    //Memory response tracking "state"
+    typedef enum {
+        NOTHING,
+        FETCH, 
+        LOAD
+    } mem_resp_t;
+
+    //Declare the state to start at INITIAL when there is a reset signal
     state_t state; 
+
+    //what dataRead contains THIS cycle based on what was requested LAST cycle
+    mem_resp_t mem_resp_state;
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
