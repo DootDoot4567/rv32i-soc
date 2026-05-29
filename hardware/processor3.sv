@@ -16,6 +16,68 @@ module processor #(
     output logic [WIDTH - 1:0] dataWrite,
     output logic [3:0] bramWriteMask
 );
+    logic flush_last_cycle;
+
+    always @(posedge clock) 
+        begin
+            flush_last_cycle <= prefetchReset;
+
+            assert (!(prefetchWriteEnable &&
+                    em_readEnable &&
+                    (mem_resp_state != FETCH)))
+            else
+                begin
+                    $display("ASSERT FAILED: invalid prefetch/write state @ %0t", $time);
+                    $fatal;
+                end
+
+        
+            assert (!(writeEnable && readEnable && state == RUN))
+            else
+                begin
+                    $display("ASSERT FAILED: simultaneous read/write @ %0t", $time);
+                    $fatal;
+                end
+
+            //Assert processor read and write operations correspond to loads and stores in MEM state 
+            assert ((state != RUN) || (!em_isLoad || readEnable))
+            else
+                begin
+                    $display("ASSERT FAILED: load without readEnable @ %0t", $time);
+                    $fatal;
+                end
+
+            assert ((state != RUN) || (!em_isStore || writeEnable))
+            else
+                begin
+                    $display("ASSERT FAILED: store without writeEnable @ %0t", $time);
+                    $fatal;
+                end
+
+            //Assert concurrent load read and fetch read does not happen
+            assert (!(em_readEnable && f_readEnable) || (state != RUN))
+            else
+                begin
+                    $display("ASSERT FAILED: concurrent fetch/load read @ %0t", $time);
+                    $fatal;
+                end
+
+            assert (!((em_isLoad || mw_isLoad) && prefetchWriteEnable) || state != RUN)
+            else
+                begin
+                    $display("ASSERT FAILED: prefetch during load @ %0t", $time);
+                    $fatal;
+                end
+
+            assert (!(decodeIsValid && flush_last_cycle) || state != RUN)
+            else 
+                begin
+                    $display("ASSERT FAILED: instructions survived flush @ %0t", $time);
+                    $fatal;
+                end
+
+        end
+
     //Constants
 
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
