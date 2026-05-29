@@ -723,12 +723,7 @@ module processor #(
 
                                 mw_instr <= m_effectiveInstr;
 
-                                // if (em_readEnable)
-                                //     begin
-                                //         mw_memData <= dataRead;
-                                //     end
-
-                                if (mw_isLoad && mw_rdId != 0)
+                                 if (mw_isLoad && mw_rdId != 0)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
@@ -740,22 +735,12 @@ module processor #(
                                         registerFile[mw_rdId] <= mw_writeBackData;
                                     end
 
-                                //Make loads and stores visible in the writeback state
-                                // mw_isStore <= em_isStore;
-                                // mw_isBranch <= em_isBranch;
-
-                                //Read next instruction
-                                // f_pc <= mw_nextPc;
-                                // f_addrRead <= mw_nextPc;
-                                // f_readEnable <= 1;
-
-                                //Stop writeback at next clock cycle
-                                // mw_writeBackEnable <= 0;
-
                                 if (w_effectiveInstr != NOP) 
                                     begin
                                         instrRetired <= instrRetired + 1;
-                                    end                                
+
+                                        // $display("%h", w_effectiveInstr);
+                                    end
 
                                 if (e_isEBREAK || d_isEBREAK) 
                                     begin
