@@ -20,6 +20,9 @@ module lsu #(
     //Load logic for half and full words and bytes
     always @(*)
         begin
+            loadHalf = 16'b0;
+            loadByte = 8'b0;
+
             loadHalf = loadAddr[1] ? dataRead[31:16] : dataRead[15:0];
 
             case(loadAddr[1:0])
