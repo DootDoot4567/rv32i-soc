@@ -769,6 +769,131 @@ module processor #(
                     endcase
                 end
         end
+// always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (mw_isLoad && mw_rdId != 0 && mw_loadAddr >= 32'h81e0 && mw_loadAddr <= 32'h81f0) begin
+    //             $display("LSU_WB cyc=%0d | mw_loadAddr=%h mw_funct3=%b dataRead=%h w_loadData=%h mw_rdId=x%0d de_pc=%h",
+    //                 cycles,
+    //                 mw_loadAddr,
+    //                 mw_funct3,
+    //                 dataRead,
+    //                 w_loadData,
+    //                 mw_rdId,
+    //                 de_pc
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (!stallDecode && !flushExecute && d_isLoad && fd_pc >= 32'h816c) begin
+    //             $display("LOAD_DECODE cyc=%0d | fd_pc=%h rs1=x%0d rs1val=%h imm=%h computed_addr=%h | e_rd=x%0d em_rd=x%0d mw_rd=x%0d | dataHaz=%b rs1Conflict=%b",
+    //                 cycles,
+    //                 fd_pc,
+    //                 d_rs1Id,
+    //                 registerFile[d_rs1Id],
+    //                 d_Iimm,
+    //                 registerFile[d_rs1Id] + d_Iimm,
+    //                 e_rdId,
+    //                 em_rdId,
+    //                 mw_rdId,
+    //                 dataHazard,
+    //                 rs1Conflict
+    //             );
+    //         end
+    //     end
+    // end
+    
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (mem_resp_state == LOAD && de_pc >= 32'h816c) begin
+    //             $display("MEM cyc=%0d type=LOAD addr=%h data=%h pc=%h",
+    //                 cycles,
+    //                 em_loadAddr,
+    //                 dataRead,
+    //                 de_pc
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (f_readEnable) begin
+    //             $display(
+    //                 "FETCH_REQ cyc=%0d f_addrRead=%h controlHaz=%b stallF=%b preFull=%b",
+    //                 cycles,
+    //                 f_addrRead,
+    //                 controlHazard,
+    //                 stallFetch,
+    //                 prefetchFull
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (prefetchWriteEnable) begin
+    //             $display(
+    //                 "MEM_RESP cyc=%0d f_addrRead=%h data=%h writeEnable=%b",
+    //                 cycles,
+    //                 f_addrRead,
+    //                 dataRead,
+    //                 prefetchWriteEnable
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (prefetchWriteEnable) begin
+    //             $display(
+    //                 "FIFO_PUSH cyc=%0d pc=%h instr=%h (memResp=%h) FULL=%b",
+    //                 cycles,
+    //                 prefetchDataWrite[63:32],
+    //                 prefetchDataWrite[31:0],
+    //                 f_addrRead,
+    //                 prefetchFull
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (prefetchReadEnable) begin
+    //             $display(
+    //                 "FIFO_POP cyc=%0d pc=%h instr=%h valid=%b stallD=%b flushD=%b",
+    //                 cycles,
+    //                 prefetchDataRead[63:32],
+    //                 prefetchDataRead[31:0],
+    //                 decodeIsValid,
+    //                 stallDecode,
+    //                 flushDecode
+    //             );
+    //         end
+    //     end
+    // end
+
+    // always_ff @(posedge clock) begin
+    //     if (!reset && state == RUN) begin
+    //         if (decodeIsValid) begin
+    //             $display(
+    //                 "DECODE cyc=%0d fd_pc=%h fd_instr=%h de_pc=%h de_instr=%h stallD=%b flushD=%b",
+    //                 cycles,
+    //                 fd_pc,
+    //                 fd_instr,
+    //                 de_pc,
+    //                 de_instr,
+    //                 stallDecode,
+    //                 flushDecode
+    //             );
+    //         end
+    //     end
+    // end
 
     // `ifdef SIMULATION
     //     always @(posedge clock) 
