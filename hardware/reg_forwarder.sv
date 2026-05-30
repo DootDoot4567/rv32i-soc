@@ -1,14 +1,19 @@
 module reg_forwarder (
     input  logic [4:0] e_rs1Id,
     input  logic [4:0] e_rs2Id,
+
     input  logic [31:0] de_rs1,
     input  logic [31:0] de_rs2,
+
     input  logic [4:0] em_rdId,
-    input  logic [31:0] em_writeBackData,
-    input  logic        em_writesRd,
     input  logic [4:0] mw_rdId,
+
+    input  logic em_writesRd,
+    input  logic mw_writesRd,
+
+    input  logic [31:0] em_writeBackData,
+
     input  logic [31:0] wb_writeData,
-    input  logic        mw_writesRd,
     output logic [31:0] e_rs1Forwarded,
     output logic [31:0] e_rs2Forwarded,
 
@@ -23,28 +28,69 @@ module reg_forwarder (
     assign ew_fwd_rs1 = (mw_rdId != 0) && mw_writesRd && (mw_rdId == e_rs1Id);
     assign ew_fwd_rs2 = (mw_rdId != 0) && mw_writesRd && (mw_rdId == e_rs2Id);
 
-    always_comb begin
-        if (em_fwd_rs1) begin
-            e_rs1Forwarded = em_writeBackData;
+    always_comb 
+        begin
+            if (em_fwd_rs1) 
+                begin
+                    e_rs1Forwarded = em_writeBackData;
+                end
+            else if (ew_fwd_rs1) 
+                begin
+                    e_rs1Forwarded = wb_writeData;
+                end
+            else 
+                begin
+                    e_rs1Forwarded = de_rs1;
+                end
         end
-        else if (ew_fwd_rs1) begin
-            e_rs1Forwarded = wb_writeData;
-        end
-        else begin
-            e_rs1Forwarded = de_rs1;
-        end
-    end
 
-    always_comb begin
-        if (em_fwd_rs2) begin
-            e_rs2Forwarded = em_writeBackData;
+    always_comb 
+        begin
+            if (em_fwd_rs2) 
+                begin
+                    e_rs2Forwarded = em_writeBackData;
+                end
+            else if (ew_fwd_rs2) 
+                begin
+                    e_rs2Forwarded = wb_writeData;
+                end
+            else 
+                begin
+                    e_rs2Forwarded = de_rs2;
+                end
         end
-        else if (ew_fwd_rs2) begin
-            e_rs2Forwarded = wb_writeData;
+
+     always_comb 
+        begin
+            if (m_writesRd && em_rdId != 0 && em_rdId == d_rs1Id)
+                begin
+                    d_rs1Forwarded = em_writeBackData;
+                end
+            else if (w_writesRd && mw_rdId != 0 && mw_rdId == d_rs1Id)
+                begin
+                    d_rs1Forwarded = mw_isLoad ? w_loadData : mw_writeBackData;
+                end
+            else
+                begin
+                    d_rs1Forwarded = registerFile[d_rs1Id];
+                end
         end
-        else begin
-            e_rs2Forwarded = de_rs2;
+
+    always_comb 
+        begin
+            if (m_writesRd && em_rdId != 0 && em_rdId == d_rs2Id)
+                begin
+                    d_rs2Forwarded = em_writeBackData;
+                end
+            else if (w_writesRd && mw_rdId != 0 && mw_rdId == d_rs2Id)
+                begin
+                    d_rs2Forwarded = mw_isLoad ? w_loadData : mw_writeBackData;
+                end
+            else
+                begin
+                    d_rs2Forwarded = registerFile[d_rs2Id];
+                end
         end
-    end
+
 
 endmodule
