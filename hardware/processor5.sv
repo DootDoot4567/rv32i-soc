@@ -162,8 +162,20 @@ module processor #(
     logic [63:0] prefetchDataWrite;
     logic [63:0] prefetchDataRead;
 
-    //signal that validates the contents of decode
+    //Signal that validates the contents of decode
     logic decodeIsValid;
+
+    //Forwarded registers
+    logic [31:0] e_rs1Forwarded;
+    logic [31:0] e_rs2Forwarded;
+
+    logic [31:0] d_rs1Forwarded;
+    logic [31:0] d_rs2Forwarded;
+
+    //Registers used to compute writeback faster and used by forwarder module 
+    logic [31:0] e_result;
+    logic [31:0] e_rs1;
+    logic [31:0] e_rs2;
 
     //FSM states
     typedef enum {
@@ -195,30 +207,6 @@ module processor #(
         end
     
     integer i;
-
-    logic [31:0] e_rs1Forwarded;
-    logic [31:0] e_rs2Forwarded;
-
-    instr_forwarder forwarder_inst (
-        .e_rs1Id(e_rs1Id),
-        .e_rs2Id(e_rs2Id),
-
-        .de_rs1(de_rs1),
-        .de_rs2(de_rs2),
-
-        .em_rdId(em_rdId),
-        .em_writeBackData(em_writeBackData),
-        .em_writesRd(m_writesRd),
-
-        .mw_rdId(mw_rdId),
-        .wb_writeData(
-            mw_isLoad ? w_loadData : mw_writeBackData
-        ),
-        .mw_writesRd(w_writesRd),
-
-        .e_rs1Forwarded(e_rs1Forwarded),
-        .e_rs2Forwarded(e_rs2Forwarded)
-    );
 
     //Instantiate the decoder (purely combinatorial) -- DECODE STATE
     decoder decoder_inst_d (
@@ -334,6 +322,29 @@ module processor #(
         .empty(prefetchEmpty),
         .full(prefetchFull)
     );
+
+    //Instantiate register forwarder (purely combinational)
+    reg_forwarder forwarder_inst (
+        .d_rs1Id(d_rs1Id),
+        .d_rs2Id(d_rs2Id),
+        .e_rs1Id(e_rs1Id),
+        .e_rs2Id(e_rs2Id),
+        .de_rs1(de_rs1),
+        .de_rs2(de_rs2),
+        .em_rdId(em_rdId),
+        .mw_rdId(mw_rdId),
+        .m_writesRd(m_writesRd),
+        .w_writesRd(w_writesRd),
+        .em_writeBackData(em_writeBackData),
+        .mw_writeBackData(mw_writeBackData),
+        .mw_isLoad(mw_isLoad),
+        .w_loadData(w_loadData),
+        .registerFile(registerFile),
+        .d_rs1Forwarded(d_rs1Forwarded),
+        .d_rs2Forwarded(d_rs2Forwarded),
+        .e_rs1Forwarded(e_rs1Forwarded),
+        .e_rs2Forwarded(e_rs2Forwarded)
+    );
     
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
@@ -371,31 +382,14 @@ module processor #(
     assign m_writesRd = (m_effectiveInstr != NOP) && !em_isStore && !em_isBranch;
     assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isStore && !mw_isBranch;
 
-    assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && 
-                        (((d_rs1Id == e_rdId) && e_writesRd) || 
-                         ((d_rs1Id == em_rdId) && m_writesRd) ||
-                         ((d_rs1Id == mw_rdId) && w_writesRd));
-
-    assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && 
-                        (((d_rs2Id == e_rdId) && e_writesRd) || 
-                         ((d_rs2Id == em_rdId )&& m_writesRd) ||
-                         ((d_rs2Id == mw_rdId) && w_writesRd));
-
-    // assign rs1Conflict = d_readsRs1 &&
-    //                     (d_rs1Id != 0) &&
-    //                     (d_rs1Id == e_rdId) &&
-    //                      e_isLoad;
-
-    // assign rs2Conflict = d_readsRs2 &&
-    //                     (d_rs2Id != 0) &&
-    //                     (d_rs2Id == e_rdId) &&
-    //                      e_isLoad;
+    assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && (d_rs1Id == e_rdId) && e_writesRd;
+    assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && (d_rs2Id == e_rdId) && e_writesRd;
 
     assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch);
     assign structuralHazard = em_readEnable || em_writeEnable;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard || prefetchFull;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLoad;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
@@ -408,32 +402,22 @@ module processor #(
 
     assign prefetchReset = flushDecode || reset;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset;
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
-    logic [31:0] e_result;
-    logic [31:0] e_rs1;
-    logic [31:0] e_rs2;
+    always_comb 
+        begin
+            case (1)
+                e_isALUreg, e_isALUimm: e_result = e_aluOut;
+                e_isJAL, e_isJALR: e_result = de_pc + 4;
+                e_isLUI: e_result = e_Uimm;
+                e_isAUIPC: e_result = de_pcPlusImm;
+                e_isCSRRS: e_result = e_csrData;
 
-    always_comb begin
-        case (1)
-            e_isALUreg,
-            e_isALUimm: e_result = e_aluOut;
-
-            e_isJAL,
-            e_isJALR:   e_result = de_pc + 4;
-
-            e_isLUI:    e_result = e_Uimm;
-
-            e_isAUIPC:  e_result = de_pcPlusImm;
-
-            e_isCSRRS:  e_result = e_csrData;
-
-            default:    e_result = 32'd0;
-        endcase
-    end
-
+                default:    e_result = 32'd0;
+            endcase
+        end
 
     always_comb 
         begin
@@ -596,11 +580,11 @@ module processor #(
 
                                         de_instr <= d_effectiveInstr;
 
-                                        de_loadAddr <= registerFile[d_rs1Id] + d_Iimm;
-                                        de_storeAddr <= registerFile[d_rs1Id] + d_Simm;
+                                        de_loadAddr <= d_rs1Forwarded + d_Iimm;
+                                        de_storeAddr <= d_rs1Forwarded + d_Simm;
 
-                                        de_rs1 <= registerFile[d_rs1Id];
-                                        de_rs2 <= registerFile[d_rs2Id];
+                                        de_rs1 <= d_rs1Forwarded;
+                                        de_rs2 <= d_rs2Forwarded;
                                     end
 
                                 if (controlHazard)
@@ -618,31 +602,6 @@ module processor #(
                                     begin
                                         f_pc <= f_pc + 4;
                                     end
-
-                                // if (e_isALUreg || e_isALUimm)
-                                //     begin
-                                //         em_writeBackData <= e_aluOut;
-                                //     end
-                                // else if (e_isJAL || e_isJALR) 
-                                //     begin
-                                //         em_writeBackData <= de_pc + 4;
-                                //     end
-                                // else if (e_isLUI)
-                                //     begin
-                                //         em_writeBackData <= e_Uimm;
-                                //     end
-                                // else if (e_isAUIPC)
-                                //     begin 
-                                //         em_writeBackData <= de_pcPlusImm;
-                                //     end
-                                // else if (e_isCSRRS)
-                                //     begin
-                                //         em_writeBackData <= e_csrData;
-                                //     end
-                                // else
-                                //     begin
-                                //         em_writeBackData <= 32'd0;
-                                //     end
 
                                 em_writeBackData <= e_result;
                                 
