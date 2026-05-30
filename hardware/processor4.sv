@@ -325,21 +325,25 @@ module processor #(
 
     //Instantiate register forwarder (purely combinational)
     reg_forwarder forwarder_inst (
+        .d_rs1Id(d_rs1Id),
+        .d_rs2Id(d_rs2Id),
         .e_rs1Id(e_rs1Id),
         .e_rs2Id(e_rs2Id),
         .de_rs1(de_rs1),
         .de_rs2(de_rs2),
         .em_rdId(em_rdId),
         .mw_rdId(mw_rdId),
-        .em_writesRd(m_writesRd),
-        .mw_writesRd(w_writesRd),
+        .m_writesRd(m_writesRd),
+        .w_writesRd(w_writesRd),
         .em_writeBackData(em_writeBackData),
-        .wb_writeData(mw_isLoad ? w_loadData : mw_writeBackData),
-        .mw_writesRd(w_writesRd),
+        .mw_writeBackData(mw_writeBackData),
+        .mw_isLoad(mw_isLoad),
+        .w_loadData(w_loadData),
+        .registerFile(registerFile),
         .d_rs1Forwarded(d_rs1Forwarded),
         .d_rs2Forwarded(d_rs2Forwarded),
         .e_rs1Forwarded(e_rs1Forwarded),
-        .e_rs2Forwarded(e_rs2Forwarded),
+        .e_rs2Forwarded(e_rs2Forwarded)
     );
     
     //Continously drive bubbled instructions
@@ -405,15 +409,13 @@ module processor #(
     always_comb 
         begin
             case (1)
-                begin
-                    e_isALUreg, e_isALUimm: e_result = e_aluOut;
-                    e_isJAL, e_isJALR: e_result = de_pc + 4;
-                    e_isLUI: e_result = e_Uimm;
-                    e_isAUIPC: e_result = de_pcPlusImm;
-                    e_isCSRRS: e_result = e_csrData;
+                e_isALUreg, e_isALUimm: e_result = e_aluOut;
+                e_isJAL, e_isJALR: e_result = de_pc + 4;
+                e_isLUI: e_result = e_Uimm;
+                e_isAUIPC: e_result = de_pcPlusImm;
+                e_isCSRRS: e_result = e_csrData;
 
-                    default:    e_result = 32'd0;
-                end
+                default:    e_result = 32'd0;
             endcase
         end
 

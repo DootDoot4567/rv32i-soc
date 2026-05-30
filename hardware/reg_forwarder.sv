@@ -1,19 +1,25 @@
 module reg_forwarder (
-    input  logic [4:0] e_rs1Id,
-    input  logic [4:0] e_rs2Id,
+    input logic [4:0] d_rs1Id,
+    input logic [4:0] d_rs2Id,
 
-    input  logic [31:0] de_rs1,
-    input  logic [31:0] de_rs2,
+    input logic [4:0] e_rs1Id,
+    input logic [4:0] e_rs2Id,
 
-    input  logic [4:0] em_rdId,
-    input  logic [4:0] mw_rdId,
+    input logic [31:0] de_rs1,
+    input logic [31:0] de_rs2,
 
-    input  logic em_writesRd,
-    input  logic mw_writesRd,
+    input logic [4:0] em_rdId,
+    input logic [4:0] mw_rdId,
 
-    input  logic [31:0] em_writeBackData,
+    input logic m_writesRd,
+    input logic w_writesRd,
 
-    input  logic [31:0] wb_writeData,
+    input logic [31:0] em_writeBackData,
+    input logic [31:0] mw_writeBackData,
+    
+    input logic mw_isLoad,
+    input logic [31:0] w_loadData,
+    input logic [31:0] registerFile [0:31],
 
     output logic [31:0] d_rs1Forwarded,
     output logic [31:0] d_rs2Forwarded,
@@ -25,11 +31,15 @@ module reg_forwarder (
     output logic em_fwd_rs2,
     output logic ew_fwd_rs2
 );
-    assign em_fwd_rs1 = (em_rdId != 0) && em_writesRd && (em_rdId == e_rs1Id);
-    assign em_fwd_rs2 = (em_rdId != 0) && em_writesRd && (em_rdId == e_rs2Id);
+    logic [31:0] wb_writeData;
+    
+    assign wb_writeData = mw_isLoad ? w_loadData : mw_writeBackData;
 
-    assign ew_fwd_rs1 = (mw_rdId != 0) && mw_writesRd && (mw_rdId == e_rs1Id);
-    assign ew_fwd_rs2 = (mw_rdId != 0) && mw_writesRd && (mw_rdId == e_rs2Id);
+    assign em_fwd_rs1 = (em_rdId != 0) && m_writesRd && (em_rdId == e_rs1Id);
+    assign em_fwd_rs2 = (em_rdId != 0) && m_writesRd && (em_rdId == e_rs2Id);
+
+    assign ew_fwd_rs1 = (mw_rdId != 0) && w_writesRd && (mw_rdId == e_rs1Id);
+    assign ew_fwd_rs2 = (mw_rdId != 0) && w_writesRd && (mw_rdId == e_rs2Id);
 
     always_comb 
         begin
