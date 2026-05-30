@@ -330,13 +330,16 @@ module processor #(
         .de_rs1(de_rs1),
         .de_rs2(de_rs2),
         .em_rdId(em_rdId),
-        .em_writeBackData(em_writeBackData),
-        .em_writesRd(m_writesRd),
         .mw_rdId(mw_rdId),
+        .em_writesRd(m_writesRd),
+        .mw_writesRd(w_writesRd),
+        .em_writeBackData(em_writeBackData),
         .wb_writeData(mw_isLoad ? w_loadData : mw_writeBackData),
         .mw_writesRd(w_writesRd),
+        .d_rs1Forwarded(d_rs1Forwarded),
+        .d_rs2Forwarded(d_rs2Forwarded),
         .e_rs1Forwarded(e_rs1Forwarded),
-        .e_rs2Forwarded(e_rs2Forwarded)
+        .e_rs2Forwarded(e_rs2Forwarded),
     );
     
     //Continously drive bubbled instructions

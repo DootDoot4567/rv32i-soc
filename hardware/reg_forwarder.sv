@@ -14,6 +14,9 @@ module reg_forwarder (
     input  logic [31:0] em_writeBackData,
 
     input  logic [31:0] wb_writeData,
+
+    output logic [31:0] d_rs1Forwarded,
+    output logic [31:0] d_rs2Forwarded,
     output logic [31:0] e_rs1Forwarded,
     output logic [31:0] e_rs2Forwarded,
 
