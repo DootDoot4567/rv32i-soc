@@ -43,49 +43,6 @@ module uart #(
     logic [7:0] rxDataRead;
     logic [7:0] rxDataWrite;
 
-    //Read from RX once readEnable goes up
-    assign rxReadEnable = readEnable && (addrSelected == 2'b00);
-
-    //Once data goes through RX, push it to RX FIFO
-    assign rxWriteEnable = rxDataValid && !rxFull;
-    
-    //Drive interrupt when the RX FIFO is not empty
-    assign interrupt = !rxEmpty;
-
-    //Write to FIFO one writeEnable goes up
-    assign txWriteEnable = writeEnable && (addrSelected == 2'b01) && !txFull;
-
-    //At the same cycle txWriteEnable goes up, write to FIFO
-    assign txDataWrite = dataWrite;
-
-    //Once FIFO is non-empty, let TX read
-    assign txDataValid = !txEmpty && !txActive;
-    assign txReadEnable = txDataValid;
-
-    //Connect the TX parallel data to the data output from FIFO
-    assign txByteData = txDataRead;
-
-    always_comb 
-        begin
-            dataRead = 8'b0;
-            if (readEnable)
-                begin
-                    case (addrSelected)
-                        2'b00: dataRead = rxDataRead;
-                        2'b10: dataRead = {interrupt,
-                                           1'b0,
-                                           txFull,
-                                           txEmpty,
-                                           rxFull,
-                                           rxEmpty,
-                                           rxEmpty && !interrupt,
-                                           txActive};
-                        
-                        default: dataRead = 8'b0;
-                    endcase
-                end
-        end
-
     uart_rx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_rx_inst (
@@ -132,5 +89,48 @@ module uart #(
         .empty(txEmpty),
         .full(txFull)
     );
+
+    //Read from RX once readEnable goes up
+    assign rxReadEnable = readEnable && (addrSelected == 2'b00);
+
+    //Once data goes through RX, push it to RX FIFO
+    assign rxWriteEnable = rxDataValid && !rxFull;
+    
+    //Drive interrupt when the RX FIFO is not empty
+    assign interrupt = !rxEmpty;
+
+    //Write to FIFO one writeEnable goes up
+    assign txWriteEnable = writeEnable && (addrSelected == 2'b01) && !txFull;
+
+    //At the same cycle txWriteEnable goes up, write to FIFO
+    assign txDataWrite = dataWrite;
+
+    //Once FIFO is non-empty, let TX read
+    assign txDataValid = !txEmpty && !txActive;
+    assign txReadEnable = txDataValid;
+
+    //Connect the TX parallel data to the data output from FIFO
+    assign txByteData = txDataRead;
+
+    always_comb 
+        begin
+            dataRead = 8'b0;
+            if (readEnable)
+                begin
+                    case (addrSelected)
+                        2'b00: dataRead = rxDataRead;
+                        2'b10: dataRead = {interrupt,
+                                           1'b0,
+                                           txFull,
+                                           txEmpty,
+                                           rxFull,
+                                           rxEmpty,
+                                           rxEmpty && !interrupt,
+                                           txActive};
+                        
+                        default: dataRead = 8'b0;
+                    endcase
+                end
+        end
 
 endmodule

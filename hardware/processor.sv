@@ -204,8 +204,7 @@ module processor #(
                 3'b110: takeBranch = isLTU;
                 3'b111: takeBranch = !isLTU;
 
-                default:
-                    takeBranch = 0;
+                default: takeBranch = 0;
             endcase
         end
 

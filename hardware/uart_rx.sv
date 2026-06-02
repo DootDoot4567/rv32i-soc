@@ -9,7 +9,13 @@ module uart_rx #(
     output logic rxDataValid,
     output logic [7:0] rxByteData
 );
-
+    logic [7:0] count;
+    logic [7:0] data;
+    logic [2:0] bitIndex;
+    logic dataValid;
+    logic parityBit;
+    logic parityError;
+    
     typedef enum{
         IDLE,
         START_BIT,
@@ -19,13 +25,6 @@ module uart_rx #(
     } state_t;
 
     state_t state = IDLE;
-
-    logic [7:0] count;
-    logic [7:0] data;
-    logic [2:0] bitIndex;
-    logic dataValid;
-    logic parityBit;
-    logic parityError;
 
     always_ff @(posedge clock)
         begin
@@ -38,7 +37,9 @@ module uart_rx #(
                         parityError <= 0;
 
                         if (rxDataStream === 1'b0)
-                            state <= START_BIT;
+                            begin
+                                state <= START_BIT;
+                            end
                     end
                 START_BIT:
                     begin
@@ -55,19 +56,25 @@ module uart_rx #(
                                     end
                             end
                         else
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                     end
                 DATA_BIT:
                     begin
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
                             begin
                                 count <= 0;
                                 data[bitIndex] <= rxDataStream;
 
                                 if (bitIndex < 7)
-                                    bitIndex <= bitIndex + 1;
+                                    begin
+                                        bitIndex <= bitIndex + 1;
+                                    end
                                 else
                                     begin
                                         bitIndex <= 0;
@@ -79,28 +86,32 @@ module uart_rx #(
                 PARITY_BIT:
                     begin
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin    
+                                count <= count + 1;
+                            end
                         else
-                        begin
-                            count <= 0;
+                            begin
+                                count <= 0;
 
-                            //Check parity
-                            if (rxDataStream != parityBit)
-                                begin
-                                    parityError <= 1;
-                                end
-                            else
-                                begin
-                                    parityError <= 0;
-                                end
-                                
-                            state <= END_BIT;
-                        end
+                                //Check parity
+                                if (rxDataStream != parityBit)
+                                    begin
+                                        parityError <= 1;
+                                    end
+                                else
+                                    begin
+                                        parityError <= 0;
+                                    end
+                                    
+                                state <= END_BIT;
+                            end
                     end
                 END_BIT:
                     begin
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
                             begin
                                 count <= 0;

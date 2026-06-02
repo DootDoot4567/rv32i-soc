@@ -8,6 +8,10 @@ module uart_tx #(
     output logic txActive,
     output logic txDataStream
 );
+    logic [7:0] count;
+    logic [7:0] data;
+    logic [2:0] bitIndex;
+    logic parityBit;
 
     typedef enum{
         IDLE,
@@ -18,11 +22,6 @@ module uart_tx #(
     } state_t;
 
     state_t state = IDLE;
-
-    logic [7:0] count;
-    logic [7:0] data;
-    logic [2:0] bitIndex;
-    logic parityBit;
 
     always_ff @(posedge clock)
         begin
@@ -47,7 +46,9 @@ module uart_tx #(
                         txDataStream <= 0;
 
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
                             begin 
                                 count <= 0;
@@ -59,13 +60,17 @@ module uart_tx #(
                         txDataStream <= data[bitIndex];
 
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
                             begin
                                 count <= 0;
 
                                 if (bitIndex < 7)
-                                    bitIndex <= bitIndex + 1;
+                                    begin
+                                        bitIndex <= bitIndex + 1;
+                                    end
                                 else
                                     begin
                                         bitIndex <= 0;
@@ -78,19 +83,23 @@ module uart_tx #(
                         txDataStream <= parityBit;
 
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
-                        begin
-                            count <= 0;
-                            state <= END_BIT;
-                        end
+                            begin
+                                count <= 0;
+                                state <= END_BIT;
+                            end
                     end
                 END_BIT:
                     begin
                         txDataStream <= 1;
 
                         if (count < CYCLES_PER_BIT - 1)
-                            count <= count + 1;
+                            begin
+                                count <= count + 1;
+                            end
                         else
                             begin
                                 count <= 0;

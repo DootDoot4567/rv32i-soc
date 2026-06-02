@@ -271,22 +271,10 @@ module processor #(
     always @(*)
         begin
             case (e_Iimm[11:0])
-                12'hc00:
-                    begin
-                        e_csrData = cycles[31:0];
-                    end
-                12'hc80:
-                    begin
-                        e_csrData = cycles[63:32];
-                    end
-                12'hc02:
-                    begin
-                        e_csrData = instrRetired[31:0];
-                    end
-                12'hc82:
-                    begin
-                        e_csrData = instrRetired[63:32];
-                    end
+                12'hc00: e_csrData = cycles[31:0];
+                12'hc80: e_csrData = cycles[63:32];
+                12'hc02: e_csrData = instrRetired[31:0];
+                12'hc82: e_csrData = instrRetired[63:32];
 
                 default: e_csrData = 32'h0;
             endcase
@@ -303,8 +291,7 @@ module processor #(
                 3'b110: e_takeBranch = e_isLTU;
                 3'b111: e_takeBranch = !e_isLTU;
 
-                default:
-                    e_takeBranch = 0;
+                default: e_takeBranch = 0;
             endcase
         end
 
