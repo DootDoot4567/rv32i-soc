@@ -41,10 +41,6 @@ module processor #(
 
     //pc value from last fetch request
     logic [31:0] capturedReqPc;
-    
-    //Track what type of request happened last cycle for proper FIFO write
-    logic lastCycleWasFetch;
-    logic lastCycleWasLoad;
 
     //Flag to decide to branch or not
     logic e_takeBranch;
@@ -164,6 +160,9 @@ module processor #(
 
     //Signal that validates the contents of decode
     logic decodeIsValid;
+
+    //signal that prevents a fetch a cycle after a control hazard
+    logic preventFetch;
 
     //Forwarded registers
     logic [31:0] e_rs1Forwarded;
@@ -331,6 +330,8 @@ module processor #(
         .e_rs2Id(e_rs2Id),
         .de_rs1(de_rs1),
         .de_rs2(de_rs2),
+        .rs1Data(registerFile[d_rs1Id]),
+        .rs2Data(registerFile[d_rs2Id]),
         .em_rdId(em_rdId),
         .mw_rdId(mw_rdId),
         .m_writesRd(m_writesRd),
@@ -339,7 +340,6 @@ module processor #(
         .mw_writeBackData(mw_writeBackData),
         .mw_isLoad(mw_isLoad),
         .w_loadData(w_loadData),
-        .registerFile(registerFile),
         .d_rs1Forwarded(d_rs1Forwarded),
         .d_rs2Forwarded(d_rs2Forwarded),
         .e_rs1Forwarded(e_rs1Forwarded),
@@ -402,20 +402,23 @@ module processor #(
 
     assign prefetchReset = flushDecode || reset;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     always_comb 
         begin
             case (1)
-                e_isALUreg, e_isALUimm: e_result = e_aluOut;
-                e_isJAL, e_isJALR: e_result = de_pc + 4;
+                e_isALUreg: e_result = e_aluOut;
+                e_isALUimm: e_result = e_aluOut;
+                e_isJAL: e_result = de_pc + 4;
+                e_isLUI: e_result = e_Uimm;
+                e_isJALR: e_result = de_pc + 4;
                 e_isLUI: e_result = e_Uimm;
                 e_isAUIPC: e_result = de_pcPlusImm;
                 e_isCSRRS: e_result = e_csrData;
 
-                default:    e_result = 32'd0;
+                default: e_result = 32'd0;
             endcase
         end
 
@@ -438,22 +441,10 @@ module processor #(
     always_comb
         begin
             case (e_Iimm[11:0])
-                12'hc00:
-                    begin
-                        e_csrData = cycles[31:0];
-                    end
-                12'hc80:
-                    begin
-                        e_csrData = cycles[63:32];
-                    end
-                12'hc02:
-                    begin
-                        e_csrData = instrRetired[31:0];
-                    end
-                12'hc82:
-                    begin
-                        e_csrData = instrRetired[63:32];
-                    end
+                12'hc00: e_csrData = cycles[31:0];
+                12'hc80: e_csrData = cycles[63:32];
+                12'hc02: e_csrData = instrRetired[31:0];
+                12'hc82: e_csrData = instrRetired[63:32];
 
                 default: e_csrData = 32'h0;
             endcase
@@ -470,8 +461,7 @@ module processor #(
                 3'b110: e_takeBranch = e_isLTU;
                 3'b111: e_takeBranch = !e_isLTU;
 
-                default:
-                    e_takeBranch = 0;
+                default: e_takeBranch = 0;
             endcase
         end
 
@@ -514,6 +504,8 @@ module processor #(
                     capturedReqPc <= RESET_ADDRESS;
                     mem_resp_state <= NOTHING;
 
+                    preventFetch <= 0;
+
                     state <= INITIAL;
                 end
             else 
@@ -530,7 +522,6 @@ module processor #(
                                 f_pc <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
                                 capturedReqPc <= RESET_ADDRESS;
-                                decodeIsValid <= 0;
                                 mem_resp_state <= NOTHING;
 
                                 state <= RUN;
@@ -543,12 +534,18 @@ module processor #(
                                 // Always capture the fetch address when fetch is requested,
                                 // regardless of memory operations in flight
                                 if (f_readEnable && !em_readEnable)
-                                //if (f_readEnable)
                                     begin
+                                        mem_resp_state <= FETCH;
                                         capturedReqPc <= f_addrRead;
                                     end
-
-                                mem_resp_state <= (f_readEnable && !em_readEnable) ? FETCH : (em_readEnable ? LOAD : NOTHING);
+                                else if (em_readEnable)
+                                    begin
+                                        mem_resp_state <= LOAD;
+                                    end
+                                else
+                                    begin
+                                        mem_resp_state <= NOTHING;
+                                    end
 
                                 if (prefetchReadEnable)
                                     begin
@@ -587,16 +584,12 @@ module processor #(
                                         de_rs2 <= d_rs2Forwarded;
                                     end
 
+                                //Compute values for the writeback and the next program counter
+                                preventFetch <= controlHazard;
+
                                 if (controlHazard)
                                     begin
-                                         if (f_readEnable && !em_readEnable)
-                                            begin
-                                                f_pc <= f_nextPc + 4;
-                                            end
-                                        else
-                                            begin
-                                                f_pc <= f_nextPc;
-                                            end
+                                        f_pc <= f_nextPc;
                                     end
                                 else if (f_readEnable)
                                     begin
