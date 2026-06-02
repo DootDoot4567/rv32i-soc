@@ -8,39 +8,39 @@ PROGRAMMER	?= ./spi_flash_programmer.sh
 PCF_FILE	?= Go_Board_Constraints.pcf
 
 #Processor 1
-# TOP			?= soc
-# TOP_TB		?= soc_tb
-# MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
-# MODULES_TB	?= soc_tb.sv
+TOP			?= soc
+TOP_TB		?= soc_tb
+MODULES		?= soc.sv processor.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+MODULES_TB	?= soc_tb.sv
 
 #Processor 2
 # TOP			?= soc
 # TOP_TB		?= soc_tb
-# MODULES		?= soc.sv processor2.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+# MODULES		?= soc.sv processor2.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
 # MODULES_TB	?= soc_tb.sv
 
 #Processor 3
 # TOP			?= soc
 # TOP_TB		?= soc_tb
-# MODULES		?= soc.sv processor3.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
+# MODULES		?= soc.sv processor3.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv
 # MODULES_TB	?= soc_tb.sv
 
 #Processor 4
-TOP			?= soc
-TOP_TB		?= soc_tb
-MODULES		?= soc.sv processor4.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
-MODULES_TB	?= soc_tb.sv
+# TOP			?= soc
+# TOP_TB		?= soc_tb
+# MODULES		?= soc.sv processor4.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
+# MODULES_TB	?= soc_tb.sv
 
 #Processor 5
 # TOP			?= soc
 # TOP_TB		?= soc_tb
-# MODULES		?= soc.sv processor5.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
+# MODULES		?= soc.sv processor5.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
 # MODULES_TB	?= soc_tb.sv
 
 #Processor 6
 # TOP			?= soc
 # TOP_TB		?= soc_tb
-# MODULES		?= soc.sv processor6.sv bram_sdp.sv decoder2.sv alu.sv lsu2.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
+# MODULES		?= soc.sv processor6.sv bram_sdp.sv decoder.sv alu.sv lsu.sv fifo.sv uart.sv uart_tx.sv uart_rx.sv reg_forwarder.sv
 # MODULES_TB	?= soc_tb.sv
 
 # Use yosys to perform synthesis
