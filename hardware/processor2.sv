@@ -268,7 +268,7 @@ module processor #(
 
     logic [31:0] e_csrData;
 
-    always @(*)
+    always_comb
         begin
             case (e_Iimm[11:0])
                 12'hc00: e_csrData = cycles[31:0];
@@ -280,7 +280,7 @@ module processor #(
             endcase
         end
 
-    always @(*)
+    always_comb
         begin
             //Branch decision logic 
             case(e_funct3)

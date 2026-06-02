@@ -45,6 +45,9 @@ module processor #(
     logic isLoad;    
     logic isStore;    
     logic isSYSTEM;
+    logic isEBREAK;
+    logic isECALL;
+    logic isCSRRS;
 
     //Indexes for input registers and ra register
     logic [4:0] rs1Id;
@@ -84,6 +87,10 @@ module processor #(
     //Word loaded to register using combinatorial logic
     logic [31:0] loadData;
 
+    //CSR Registers
+    logic [63:0] cycles;
+    logic [63:0] instrRetired;
+
     //FSM states
     typedef enum {
         HALT,
@@ -121,6 +128,9 @@ module processor #(
         .isLoad,
         .isStore,
         .isSYSTEM,
+        .isEBREAK,
+        .isECALL,
+        .isCSRRS,
         .rs1Id,
         .rs2Id,
         .rdId,
@@ -194,7 +204,21 @@ module processor #(
     //Continously drive the mask for a store to BRAM
     //assign bramWriteMask = storeMask;
 
-    always @(*)
+    logic [31:0] csrData;
+
+    always_comb
+        begin
+            case (Iimm[11:0])
+                12'hc00: csrData = cycles[31:0];
+                12'hc80: csrData = cycles[63:32];
+                12'hc02: csrData = instrRetired[31:0];
+                12'hc82: csrData = instrRetired[63:32];
+
+                default: csrData = 32'h0;
+            endcase
+        end
+
+    always_comb
         begin
             //Branch decision logic 
             case(funct3)
@@ -229,10 +253,15 @@ module processor #(
 
                     writeBackEnable <= 0;
 
+                    cycles <= 0;
+                    instrRetired <= 0;
+
                     state <= INITIAL;
                 end
             else 
                 begin
+                    cycles <= cycles + 1;
+
                     case(state)
                         HALT: 
                             begin
@@ -260,7 +289,14 @@ module processor #(
                                             isAUIPC ? Uimm[31:0] :
                                             Bimm[31:0]);
 
-                                state <= EXECUTE;
+                                if (isEBREAK) 
+                                    begin
+                                        state <= HALT;
+                                    end
+                                else
+                                    begin
+                                        state <= EXECUTE;
+                                    end
                             end
                         EXECUTE: 
                             begin
@@ -292,6 +328,10 @@ module processor #(
                                 else if (isAUIPC)
                                     begin 
                                         writeBackData <= pcPlusImm;
+                                    end
+                                else if (isCSRRS)
+                                    begin
+                                        writeBackData <= csrData;
                                     end
                                 else
                                     begin
