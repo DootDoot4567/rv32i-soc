@@ -8,6 +8,9 @@ module reg_forwarder (
     input logic [31:0] de_rs1,
     input logic [31:0] de_rs2,
 
+    input logic [31:0] rs1Data,
+    input logic [31:0] rs2Data,
+
     input logic [4:0] em_rdId,
     input logic [4:0] mw_rdId,
 
@@ -19,7 +22,6 @@ module reg_forwarder (
     
     input logic mw_isLoad,
     input logic [31:0] w_loadData,
-    input logic [31:0] registerFile [0:31],
 
     output logic [31:0] d_rs1Forwarded,
     output logic [31:0] d_rs2Forwarded,
@@ -85,7 +87,7 @@ module reg_forwarder (
                 end
             else
                 begin
-                    d_rs1Forwarded = registerFile[d_rs1Id];
+                    d_rs1Forwarded = rs1Data;
                 end
         end
 
@@ -101,7 +103,7 @@ module reg_forwarder (
                 end
             else
                 begin
-                    d_rs2Forwarded = registerFile[d_rs2Id];
+                    d_rs2Forwarded = rs2Data;
                 end
         end
 
