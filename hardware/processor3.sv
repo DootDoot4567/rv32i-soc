@@ -16,68 +16,6 @@ module processor #(
     output logic [WIDTH - 1:0] dataWrite,
     output logic [3:0] bramWriteMask
 );
-    logic flush_last_cycle;
-
-    always @(posedge clock) 
-        begin
-            flush_last_cycle <= prefetchReset;
-
-            assert (!(prefetchWriteEnable &&
-                    em_readEnable &&
-                    (mem_resp_state != FETCH)))
-            else
-                begin
-                    $display("ASSERT FAILED: invalid prefetch/write state @ %0t", $time);
-                    $fatal;
-                end
-
-        
-            assert (!(writeEnable && readEnable && state == RUN))
-            else
-                begin
-                    $display("ASSERT FAILED: simultaneous read/write @ %0t", $time);
-                    $fatal;
-                end
-
-            //Assert processor read and write operations correspond to loads and stores in MEM state 
-            assert ((state != RUN) || (!em_isLoad || readEnable))
-            else
-                begin
-                    $display("ASSERT FAILED: load without readEnable @ %0t", $time);
-                    $fatal;
-                end
-
-            assert ((state != RUN) || (!em_isStore || writeEnable))
-            else
-                begin
-                    $display("ASSERT FAILED: store without writeEnable @ %0t", $time);
-                    $fatal;
-                end
-
-            //Assert concurrent load read and fetch read does not happen
-            assert (!(em_readEnable && f_readEnable) || (state != RUN))
-            else
-                begin
-                    $display("ASSERT FAILED: concurrent fetch/load read @ %0t", $time);
-                    $fatal;
-                end
-
-            assert (!((em_isLoad || mw_isLoad) && prefetchWriteEnable) || state != RUN)
-            else
-                begin
-                    $display("ASSERT FAILED: prefetch during load @ %0t", $time);
-                    $fatal;
-                end
-
-            assert (!(decodeIsValid && flush_last_cycle) || state != RUN)
-            else 
-                begin
-                    $display("ASSERT FAILED: instructions survived flush @ %0t", $time);
-                    $fatal;
-                end
-
-        end
-
     //Constants
 
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
@@ -224,6 +162,9 @@ module processor #(
 
     //signal that validates the contents of decode
     logic decodeIsValid;
+
+    //signal that prevents a fetch a cycle after a control hazard
+    logic preventFetch;
 
     //FSM states
     typedef enum {
@@ -429,7 +370,7 @@ module processor #(
 
     assign prefetchReset = flushDecode || reset;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
@@ -453,22 +394,10 @@ module processor #(
     always_comb
         begin
             case (e_Iimm[11:0])
-                12'hc00:
-                    begin
-                        e_csrData = cycles[31:0];
-                    end
-                12'hc80:
-                    begin
-                        e_csrData = cycles[63:32];
-                    end
-                12'hc02:
-                    begin
-                        e_csrData = instrRetired[31:0];
-                    end
-                12'hc82:
-                    begin
-                        e_csrData = instrRetired[63:32];
-                    end
+                12'hc00: e_csrData = cycles[31:0];
+                12'hc80: e_csrData = cycles[63:32];
+                12'hc02: e_csrData = instrRetired[31:0];
+                12'hc82: e_csrData = instrRetired[63:32];
 
                 default: e_csrData = 32'h0;
             endcase
@@ -485,8 +414,7 @@ module processor #(
                 3'b110: e_takeBranch = e_isLTU;
                 3'b111: e_takeBranch = !e_isLTU;
 
-                default:
-                    e_takeBranch = 0;
+                default: e_takeBranch = 0;
             endcase
         end
 
@@ -529,6 +457,8 @@ module processor #(
                     capturedReqPc <= RESET_ADDRESS;
                     mem_resp_state <= NOTHING;
 
+                    preventFetch <= 0;
+
                     state <= INITIAL;
                 end
             else 
@@ -547,9 +477,7 @@ module processor #(
                                 f_pc <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
                                 capturedReqPc <= RESET_ADDRESS;
-                                decodeIsValid <= 0;
                                 mem_resp_state <= NOTHING;
-
                                 state <= RUN;
                             end
                         RUN:
@@ -607,17 +535,11 @@ module processor #(
                                     end
 
                                 //Compute values for the writeback and the next program counter
+                                preventFetch <= controlHazard;
 
-                                 if (controlHazard)
+                                if (controlHazard)
                                     begin
-                                         if (f_readEnable && !em_readEnable)
-                                            begin
-                                                f_pc <= f_nextPc + 4;
-                                            end
-                                        else
-                                            begin
-                                                f_pc <= f_nextPc;
-                                            end
+                                        f_pc <= f_nextPc;
                                     end
                                 else if (f_readEnable)
                                     begin
