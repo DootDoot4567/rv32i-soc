@@ -134,7 +134,6 @@ module uart_rx #(
             endcase
         end
 
-
     assign rxDataValid = dataValid;
     assign rxByteData = data;
 

@@ -38,7 +38,8 @@ module soc #(
     logic [1:0] uartAddr;
 
     logic uartInterrupt;
-    logic uartReadFire;
+    logic uartReadEnable;
+    logic uartWriteEnable;
     logic uartResponseValid;
     logic uartRead;
     logic uartWrite;
@@ -63,15 +64,15 @@ module soc #(
         .ADDR_WIDTH(ADDR_WIDTH),
         .RESET_ADDRESS(ROM_BASE)
     ) processor_inst (
-        .clock,
-        .reset,
-        .dataRead,
-        .writeEnable,
-        .readEnable,
-        .addrRead,
-        .addrWrite,
-        .dataWrite,
-        .bramWriteMask
+        .clock(clock),
+        .reset(reset),
+        .dataRead(dataRead),
+        .writeEnable(writeEnable),
+        .readEnable(readEnable),
+        .addrRead(addrRead),
+        .addrWrite(addrWrite),
+        .dataWrite(dataWrite),
+        .bramWriteMask(bramWriteMask)
     );
 
     bram_sdp #(
@@ -86,24 +87,24 @@ module soc #(
         .readEnable(readEnable && bramSelected),
         .addrRead(bramAddrRead),
         .addrWrite(bramAddrWrite),
-        .bramWriteMask,
-        .dataWrite,
+        .bramWriteMask(bramWriteMask),
+        .dataWrite(dataWrite),
         .dataRead(bramDataRead)
     );
 
     uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_inst (
-        .clock,
-        .reset,
+        .clock(clock),
+        .reset(reset),
         .addrSelected(uartAddr),
-        .writeEnable(uartWrite && writeEnable),
-        .readEnable(uartRead && readEnable),
+        .writeEnable(uartWriteEnable),
+        .readEnable(uartReadEnable),
         .dataWrite(uartDataWrite8),
-        .rxDataStream,
+        .rxDataStream(rxDataStream),
         .interrupt(uartInterrupt),
         .dataRead(uartDataRead8),
-        .txDataStream
+        .txDataStream(txDataStream)
     );
 
     //Address for decoding (use read address if reading, write address if writing
@@ -113,8 +114,10 @@ module soc #(
     assign uartAddr = uartRead ? addrRead[1:0] : uartWrite ? addrWrite[1:0] : 2'b00;
 
     //Select uart if read or write is high while enable signal also being high
-    assign uartSelected = (uartReadFire) || (uartWrite && writeEnable);
-    assign uartReadFire = uartRead && readEnable;
+    assign uartReadEnable = uartRead && readEnable;
+    assign uartWriteEnable = uartWrite && writeEnable;
+
+    assign uartSelected = (uartReadEnable) || (uartWriteEnable);
 
     //Outside of IO region (Ideally).
     //Most likely needs to be fixed to prevent writes to addresses below 0x400
@@ -137,7 +140,7 @@ module soc #(
     assign bramAddrRead  = (addrRead  - ROM_BASE) >> 2;
     assign bramAddrWrite = (addrWrite - ROM_BASE) >> 2;
 
-    assign dataRead = (uartReadFire || uartResponseValid) ? 
+    assign dataRead = (uartReadEnable || uartResponseValid) ? 
         {uartReadHold, 
          uartReadHold, 
          uartReadHold, 
@@ -158,7 +161,7 @@ module soc #(
                     uartResponseValid <= 1'b0;
 
                     //If CPU reaches UART's read address and enable is up  
-                    if (uartReadFire) 
+                    if (uartReadEnable) 
                         begin
                             //Hold read data byte for one cycle and respond
                             uartReadHold  <= uartDataRead8;
