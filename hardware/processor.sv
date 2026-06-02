@@ -27,9 +27,9 @@ module processor #(
     logic takeBranch;
 
     //Flags that compute comparison (done in alu)
-    output logic isEQ;
-    output logic isLTU;
-    output logic isLT;
+    logic isEQ;
+    logic isLTU;
+    logic isLT;
 
     logic [31:0] instr;
     logic [31:0] fetchedInstruction;
@@ -170,7 +170,8 @@ module processor #(
         .storeAddr,
         .rs2,
         .dataRead,
-        .funct3,
+        .funct3Load(funct3),
+        .funct3Store(funct3),
         .storeData,
         .loadData,
         .storeMask
