@@ -22,6 +22,12 @@ module processor #(
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
 
+    //Depth for Branch Prediction Table (BHT)
+    localparam BHT_DEPTH = 4096;
+
+    //Address width for BHT
+    localparam BHT_ADDR_WIDTH = $clog2(BHT_DEPTH);
+
     //Program counters
 
     //address being requested this cycle
@@ -41,10 +47,6 @@ module processor #(
 
     //pc value from last fetch request
     logic [31:0] capturedReqPc;
-    
-    //Track what type of request happened last cycle for proper FIFO write
-    logic lastCycleWasFetch;
-    logic lastCycleWasLoad;
 
     //Flag to decide to branch or not
     logic e_takeBranch;
@@ -165,6 +167,9 @@ module processor #(
     //Signal that validates the contents of decode
     logic decodeIsValid;
 
+    //signal that prevents a fetch a cycle after a control hazard
+    logic preventFetch;
+
     //Forwarded registers
     logic [31:0] e_rs1Forwarded;
     logic [31:0] e_rs2Forwarded;
@@ -176,6 +181,16 @@ module processor #(
     logic [31:0] e_result;
     logic [31:0] e_rs1;
     logic [31:0] e_rs2;
+
+    //Branch prediction registers and signals
+    logic d_predictTaken, fd_predictTaken, de_predictTaken;
+
+    logic [1:0] bpGHT [0:BHT_DEPTH - 1];
+    logic [31:0] bpPc;
+
+    logic [BHT_ADDR_WIDTH - 1:0] bpIndex;
+    logic [BHT_ADDR_WIDTH - 1:0] bpGHR;
+    logic [BHT_ADDR_WIDTH - 1:0] fd_bpIndex, de_bpIndex;
 
     //FSM states
     typedef enum {
@@ -331,6 +346,8 @@ module processor #(
         .e_rs2Id(e_rs2Id),
         .de_rs1(de_rs1),
         .de_rs2(de_rs2),
+        .rs1Data(registerFile[d_rs1Id]),
+        .rs2Data(registerFile[d_rs2Id]),
         .em_rdId(em_rdId),
         .mw_rdId(mw_rdId),
         .m_writesRd(m_writesRd),
@@ -339,7 +356,6 @@ module processor #(
         .mw_writeBackData(mw_writeBackData),
         .mw_isLoad(mw_isLoad),
         .w_loadData(w_loadData),
-        .registerFile(registerFile),
         .d_rs1Forwarded(d_rs1Forwarded),
         .d_rs2Forwarded(d_rs2Forwarded),
         .e_rs1Forwarded(e_rs1Forwarded),
@@ -385,7 +401,7 @@ module processor #(
     assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && (d_rs1Id == e_rdId) && e_writesRd;
     assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && (d_rs2Id == e_rdId) && e_writesRd;
 
-    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch);
+    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch) || (e_isBranch && !e_takeBranch && de_predictTaken);
     assign structuralHazard = em_readEnable || em_writeEnable;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
@@ -402,20 +418,51 @@ module processor #(
 
     assign prefetchReset = flushDecode || reset;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable;
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
+
+    assign d_predictTaken = bpGHT[bpIndex][1];
+    assign bpIndex = computeGHTIndex(f_pc);
+
+    function automatic [BHT_ADDR_WIDTH - 1:0] computeGHTIndex;
+        input [31:0] pc;
+        computeGHTIndex = pc[BHT_ADDR_WIDTH + 1:2] ^ bpGHR;
+    endfunction
+
+    function automatic [BHT_ADDR_WIDTH - 1:0] updateGHR;
+        input [BHT_ADDR_WIDTH - 1:0] gblHistReg;
+        input taken;
+        updateGHR = ({gblHistReg[BHT_ADDR_WIDTH-2:0], taken});
+    endfunction
+
+    //Saturated counter update
+    function automatic [1:0] updateCounter;
+        input [1:0] counter;
+        input logic taken;
+
+        if (taken)
+            begin
+                updateCounter = (counter == 2'b11) ? 2'b11 : counter + 1;
+            end
+        else
+            begin
+                updateCounter = (counter == 2'b00) ? 2'b00 : counter - 1;
+            end
+    endfunction
 
     always_comb 
         begin
             case (1)
-                e_isALUreg, e_isALUimm: e_result = e_aluOut;
-                e_isJAL, e_isJALR: e_result = de_pc + 4;
+                e_isALUreg: e_result = e_aluOut;
+                e_isALUimm: e_result = e_aluOut;
+                e_isJAL: e_result = de_pc + 4;
+                e_isJALR: e_result = de_pc + 4;
                 e_isLUI: e_result = e_Uimm;
                 e_isAUIPC: e_result = de_pcPlusImm;
                 e_isCSRRS: e_result = e_csrData;
 
-                default:    e_result = 32'd0;
+                default: e_result = 32'd0;
             endcase
         end
 
@@ -438,22 +485,10 @@ module processor #(
     always_comb
         begin
             case (e_Iimm[11:0])
-                12'hc00:
-                    begin
-                        e_csrData = cycles[31:0];
-                    end
-                12'hc80:
-                    begin
-                        e_csrData = cycles[63:32];
-                    end
-                12'hc02:
-                    begin
-                        e_csrData = instrRetired[31:0];
-                    end
-                12'hc82:
-                    begin
-                        e_csrData = instrRetired[63:32];
-                    end
+                12'hc00: e_csrData = cycles[31:0];
+                12'hc80: e_csrData = cycles[63:32];
+                12'hc02: e_csrData = instrRetired[31:0];
+                12'hc82: e_csrData = instrRetired[63:32];
 
                 default: e_csrData = 32'h0;
             endcase
@@ -470,8 +505,7 @@ module processor #(
                 3'b110: e_takeBranch = e_isLTU;
                 3'b111: e_takeBranch = !e_isLTU;
 
-                default:
-                    e_takeBranch = 0;
+                default: e_takeBranch = 0;
             endcase
         end
 
@@ -483,6 +517,11 @@ module processor #(
                     for (i = 0; i < 32; i = i + 1)
                         begin
                             registerFile[i] <= 32'd0;
+                        end
+
+                    for (i = 0; i < BHT_DEPTH; i = i + 1)
+                        begin
+                            bpGHT[i] <= 2'b00;
                         end
 
                     f_pc <= RESET_ADDRESS; fd_pc <= 0; de_pc <= 0;
@@ -514,6 +553,12 @@ module processor #(
                     capturedReqPc <= RESET_ADDRESS;
                     mem_resp_state <= NOTHING;
 
+                    preventFetch <= 0;
+
+                    bpGHR <= 0;
+                    fd_bpIndex <= 0; de_bpIndex <= 0;
+                    fd_predictTaken <= 0; de_predictTaken <= 0;
+
                     state <= INITIAL;
                 end
             else 
@@ -530,7 +575,6 @@ module processor #(
                                 f_pc <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
                                 capturedReqPc <= RESET_ADDRESS;
-                                decodeIsValid <= 0;
                                 mem_resp_state <= NOTHING;
 
                                 state <= RUN;
@@ -543,17 +587,25 @@ module processor #(
                                 // Always capture the fetch address when fetch is requested,
                                 // regardless of memory operations in flight
                                 if (f_readEnable && !em_readEnable)
-                                //if (f_readEnable)
                                     begin
+                                        mem_resp_state <= FETCH;
                                         capturedReqPc <= f_addrRead;
                                     end
-
-                                mem_resp_state <= (f_readEnable && !em_readEnable) ? FETCH : (em_readEnable ? LOAD : NOTHING);
+                                else if (em_readEnable)
+                                    begin
+                                        mem_resp_state <= LOAD;
+                                    end
+                                else
+                                    begin
+                                        mem_resp_state <= NOTHING;
+                                    end
 
                                 if (prefetchReadEnable)
                                     begin
                                         fd_instr <= prefetchDataRead[31:0];
                                         fd_pc <= prefetchDataRead[63:32];
+                                        fd_bpIndex <= computeGHTIndex(prefetchDataRead[63:32]);
+                                        fd_predictTaken <= d_predictTaken;
                                         decodeIsValid <= 1;
                                     end
                                 else if (!stallDecode || flushDecode)
@@ -567,6 +619,9 @@ module processor #(
                                         de_pcPlusImm <= 0;
                                         de_instr <= NOP;
 
+                                        de_bpIndex <= 0;
+                                        de_predictTaken <= 0;
+
                                         de_loadAddr <= 0;
                                         de_storeAddr <= 0;
 
@@ -578,6 +633,9 @@ module processor #(
                                         de_pc <= fd_pc;
                                         de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm : (d_isAUIPC ? d_Uimm : d_Bimm));
 
+                                        de_bpIndex <= fd_bpIndex;
+                                        de_predictTaken <= fd_predictTaken;
+
                                         de_instr <= d_effectiveInstr;
 
                                         de_loadAddr <= d_rs1Forwarded + d_Iimm;
@@ -587,16 +645,11 @@ module processor #(
                                         de_rs2 <= d_rs2Forwarded;
                                     end
 
+                                preventFetch <= controlHazard;
+
                                 if (controlHazard)
                                     begin
-                                         if (f_readEnable && !em_readEnable)
-                                            begin
-                                                f_pc <= f_nextPc + 4;
-                                            end
-                                        else
-                                            begin
-                                                f_pc <= f_nextPc;
-                                            end
+                                        f_pc <= f_nextPc;
                                     end
                                 else if (f_readEnable)
                                     begin
@@ -604,6 +657,12 @@ module processor #(
                                     end
 
                                 em_writeBackData <= e_result;
+
+                                if (e_isBranch && e_effectiveInstr != NOP)
+                                    begin
+                                        bpGHR <= updateGHR(bpGHR, e_takeBranch);
+                                        bpGHT[de_bpIndex] <= updateCounter(bpGHT[de_bpIndex], e_takeBranch); 
+                                    end
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
