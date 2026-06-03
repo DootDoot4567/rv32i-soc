@@ -1,25 +1,8 @@
 module alu(
-    input logic [31:0] rs1,
-    input logic [31:0] rs2,
+    input logic [31:0] aluIn1,
+    input logic [31:0] aluIn2,
     
     input logic [31:0] instr,
-
-    input logic isALUreg,
-    input logic isALUimm,
-    input logic isBranch,
-    input logic isJALR,
-    input logic isJAL,
-    input logic isAUIPC,
-    input logic isLUI,
-    input logic isLoad,
-    input logic isStore,
-    input logic isSYSTEM,
-
-    input logic [31:0] Uimm,
-    input logic [31:0] Iimm,
-    input logic [31:0] Simm,
-    input logic [31:0] Bimm,
-    input logic [31:0] Jimm,
 
     input logic [2:0] funct3,
     input logic [6:0] funct7,
@@ -30,6 +13,13 @@ module alu(
     output logic isLTU,
     output logic isLT
 );
+    logic [32:0] aluMinus;
+    logic [31:0] aluPlus;
+
+    logic [31:0] shifterIn;
+    logic [31:0] shifter;
+    logic [31:0] leftShift;
+
     //Create a shifter function to flip all 32 bits
     function [31:0] flip32(input [31:0] x);
         //Use if simulator supports array slicing
@@ -41,20 +31,6 @@ module alu(
 		    x[16], x[17], x[18], x[19], x[20], x[21], x[22], x[23],
 		    x[24], x[25], x[26], x[27], x[28], x[29], x[30], x[31]};
     endfunction
-    
-    logic [31:0] aluIn1;
-    logic [31:0] aluIn2;
-
-    logic [32:0] aluMinus;
-    logic [31:0] aluPlus;
-
-    logic [31:0] shifterIn;
-    logic [31:0] shifter;
-    logic [31:0] leftShift;
-
-    //Drive both inputs for the ALU and ALU operations
-    assign aluIn1 = rs1;
-    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
 
     assign aluMinus = {1'b1, ~aluIn2} + {1'b0, aluIn1} + 33'b1;
     assign aluPlus = aluIn1 + aluIn2;
