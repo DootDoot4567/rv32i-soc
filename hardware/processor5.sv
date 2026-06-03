@@ -56,6 +56,10 @@ module processor #(
     logic e_isLTU;
     logic e_isLT;
 
+    //ALU inputs
+    logic [31:0] aluIn1;
+    logic [31:0] aluIn2;
+
     //Instruction register and its variants (bubbled)
     logic [31:0] fd_instr, de_instr, em_instr, mw_instr;
 
@@ -281,24 +285,9 @@ module processor #(
 
     //Instantiate the alu (purely combinatorial)
     alu alu_inst (
-        .rs1(e_rs1Forwarded),
-        .rs2(e_rs2Forwarded),
+        .aluIn1(aluIn1),
+        .aluIn2(aluIn2),
         .instr(e_effectiveInstr),
-        .isALUreg(e_isALUreg),
-        .isALUimm(e_isALUimm),
-        .isBranch(e_isBranch),
-        .isJALR(e_isJALR),
-        .isJAL(e_isJAL),
-        .isAUIPC(e_isAUIPC),
-        .isLUI(e_isLUI),
-        .isLoad(e_isLoad),
-        .isStore(e_isStore),
-        .isSYSTEM(e_isSYSTEM),
-        .Uimm(e_Uimm),
-        .Iimm(e_Iimm),
-        .Simm(e_Simm),
-        .Bimm(e_Bimm),
-        .Jimm(e_Jimm),
         .funct3(e_funct3),
         .funct7(e_funct7),
         .pcJALR(e_pcJALR),
@@ -361,6 +350,10 @@ module processor #(
         .e_rs1Forwarded(e_rs1Forwarded),
         .e_rs2Forwarded(e_rs2Forwarded)
     );
+
+    //Continously drive ALU inputs
+    assign aluIn1 = e_rs1Forwarded;
+    assign aluIn2 = (e_isALUreg || e_isBranch) ? e_rs2Forwarded : e_Iimm;
     
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;

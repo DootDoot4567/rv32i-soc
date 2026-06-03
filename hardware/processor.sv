@@ -31,6 +31,10 @@ module processor #(
     logic isLTU;
     logic isLT;
 
+    //ALU inputs
+    logic [31:0] aluIn1;
+    logic [31:0] aluIn2;
+
     logic [31:0] instr;
     logic [31:0] fetchedInstruction;
 
@@ -145,24 +149,9 @@ module processor #(
 
     //Instantiate the alu (purely combinatorial)
     alu alu_inst (
-        .rs1,
-        .rs2,
+        .aluIn1,
+        .aluIn2,
         .instr,
-        .isALUreg,
-        .isALUimm,
-        .isBranch,
-        .isJALR,
-        .isJAL,
-        .isAUIPC,
-        .isLUI,
-        .isLoad,
-        .isStore,
-        .isSYSTEM,
-        .Uimm,
-        .Iimm,
-        .Simm,
-        .Bimm,
-        .Jimm,
         .funct3,
         .funct7,
         .pcJALR,
@@ -186,6 +175,10 @@ module processor #(
         .loadData,
         .storeMask
     );
+
+    //Continously drive ALU inputs
+    assign aluIn1 = rs1;
+    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
 
     //Continously drive the target memory address (used by loads and stores)
     assign loadAddr  = rs1 + Iimm;
