@@ -2,7 +2,8 @@ module alu(
     input logic [31:0] aluIn1,
     input logic [31:0] aluIn2,
     
-    input logic [31:0] instr,
+    input logic instr5,
+    input logic instr30,
 
     input logic [2:0] funct3,
 
@@ -39,7 +40,7 @@ module alu(
     assign isLT = (aluIn1[31] ^ aluIn2[31]) ? aluIn1[31] : aluMinus[32];
 
     assign shifterIn = (funct3 == 3'b001) ? flip32(aluIn1) : aluIn1;
-    assign shifter = $signed({(instr[30] & aluIn1[31]), shifterIn}) >>> aluIn2[4:0];
+    assign shifter = $signed({(instr30 & aluIn1[31]), shifterIn}) >>> aluIn2[4:0];
 
     assign leftShift = flip32(shifter);
 
@@ -49,7 +50,7 @@ module alu(
     always_comb
         begin
             case(funct3)
-                3'b000: aluOut = (instr[30] & instr[5]) ? aluMinus[31:0] : aluPlus;
+                3'b000: aluOut = (instr30 & instr5) ? aluMinus[31:0] : aluPlus;
                 3'b001: aluOut = leftShift;
                 3'b010: aluOut = {31'b0, isLT};
 	            3'b011: aluOut = {31'b0, isLTU};
