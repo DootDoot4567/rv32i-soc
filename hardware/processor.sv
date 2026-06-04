@@ -153,7 +153,6 @@ module processor #(
         .aluIn2,
         .instr,
         .funct3,
-        .funct7,
         .pcJALR,
         .aluOut,
         .isEQ,

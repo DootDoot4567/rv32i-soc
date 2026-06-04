@@ -273,7 +273,6 @@ module processor #(
         .aluIn2(aluIn2),
         .instr(e_effectiveInstr),
         .funct3(e_funct3),
-        .funct7(e_funct7),
         .pcJALR(e_pcJALR),
         .aluOut(e_aluOut),
         .isEQ(e_isEQ),
