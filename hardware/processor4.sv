@@ -271,7 +271,8 @@ module processor #(
     alu alu_inst (
         .aluIn1(aluIn1),
         .aluIn2(aluIn2),
-        .instr(e_effectiveInstr),
+        .instr5(e_effectiveInstr[5]),
+        .instr30(e_effectiveInstr[30]),
         .funct3(e_funct3),
         .pcJALR(e_pcJALR),
         .aluOut(e_aluOut),
