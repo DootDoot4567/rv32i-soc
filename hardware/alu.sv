@@ -5,7 +5,6 @@ module alu(
     input logic [31:0] instr,
 
     input logic [2:0] funct3,
-    input logic [6:0] funct7,
 
     output logic [31:0] pcJALR,
     output logic [31:0] aluOut,
@@ -47,10 +46,10 @@ module alu(
     assign pcJALR = {aluPlus[31:1], 1'b0};
  
     //Define combinatorial operatations in ALU
-    always @(*)
+    always_comb
         begin
             case(funct3)
-                3'b000: aluOut = (funct7[5] & instr[5]) ? aluMinus[31:0] : aluPlus;
+                3'b000: aluOut = (instr[30] & instr[5]) ? aluMinus[31:0] : aluPlus;
                 3'b001: aluOut = leftShift;
                 3'b010: aluOut = {31'b0, isLT};
 	            3'b011: aluOut = {31'b0, isLTU};
