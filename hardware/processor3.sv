@@ -5,16 +5,15 @@ module processor #(
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
 ) (
-    input logic clock,
-    input logic reset,
-    input logic [WIDTH - 1:0] dataRead,
-
-    output logic writeEnable,
-    output logic readEnable,
-    output logic [ADDR_WIDTH - 1:0] addrRead,
-    output logic [ADDR_WIDTH - 1:0] addrWrite,
-    output logic [WIDTH - 1:0] dataWrite,
-    output logic [3:0] bramWriteMask
+    input logic clockIn,
+    input logic resetIn,
+    input logic [WIDTH - 1:0] dataIn,
+    output logic [WIDTH - 1:0] dataOut,
+    output logic [ADDR_WIDTH - 1:0] addrOut,
+    output logic [3:0] selectOut,
+    output logic writeEnableOut,
+    output logic strobeOut,
+    output logic cycleOut
 );
     //Constants
 
@@ -124,7 +123,7 @@ module processor #(
 
     //Word written to word addressed bram and the mask 
     logic [31:0] e_storeData;
-    logic [3:0] e_storeMask, em_storeMask;
+    logic [3:0] e_storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] w_loadData;
@@ -181,7 +180,8 @@ module processor #(
     typedef enum {
         NOTHING,
         FETCH, 
-        LOAD
+        LOAD,
+        STORE
     } mem_resp_t;
 
     //Declare the state to start at INITIAL when there is a reset signal
@@ -277,7 +277,7 @@ module processor #(
         .loadAddr(w_loadAddr),
         .storeAddr(e_storeAddr),
         .rs2(de_rs2),
-        .dataRead(dataRead),
+        .dataRead(dataIn),
         .funct3Load(mw_funct3),
         .funct3Store(e_funct3),
         .storeData(e_storeData),
@@ -290,7 +290,7 @@ module processor #(
         .DEPTH(16),
         .WIDTH(64)
     ) fifo_inst (
-        .clock,
+        .clock(clockIn),
         .reset(prefetchReset),
         .writeEnable(prefetchWriteEnable),
         .readEnable(prefetchReadEnable),
@@ -318,16 +318,16 @@ module processor #(
     assign f_readEnable = !stallFetch;
     assign f_addrRead = controlHazard ? f_nextPc : f_pc;
 
-    assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
-    assign addrRead = em_readEnable ? em_loadAddr : f_addrRead;
+    // assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
+    // assign addrRead = em_readEnable ? em_loadAddr : f_addrRead;
     
     //Continously drive external BRAM signals using EXEC -> MEM signals
-    assign writeEnable = em_writeEnable;
-    assign addrWrite = em_storeAddr;
-    assign dataWrite = em_dataWrite;
+    assign writeEnableOut = em_writeEnable;
+    assign addrOut = (em_writeEnable) ? em_storeAddr : (em_readEnable ? em_loadAddr : f_addrRead);
+    assign dataOut = em_dataWrite;
 
     //Continously drive the mask for a store to BRAM
-    assign bramWriteMask = em_storeMask; 
+    // assign bramWriteMask = em_storeMask; 
 
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
     assign d_readsRs2 = decodeIsValid && (d_isALUreg || d_isBranch || d_isStore);
@@ -361,12 +361,12 @@ module processor #(
     assign em_readEnable = em_isLoad;
     assign em_writeEnable = em_isStore;
 
-    assign prefetchReset = flushDecode || reset;
+    assign prefetchReset = flushDecode || resetIn;
 
     assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
-    assign prefetchDataWrite   = {capturedReqPc, dataRead};
+    assign prefetchDataWrite   = {capturedReqPc, dataIn};
 
     always_comb 
         begin
@@ -412,9 +412,9 @@ module processor #(
         end
 
     //Reset control + FSM
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
@@ -451,6 +451,7 @@ module processor #(
                     mem_resp_state <= NOTHING;
 
                     preventFetch <= 0;
+                    selectOut <= 0;
 
                     state <= INITIAL;
                 end
@@ -458,7 +459,7 @@ module processor #(
                 begin
                     cycles <= cycles + 1;
 
-                    // $display("%h", dataRead);
+                    // $display("%h", dataIn);
 
                     case(state)
                         HALT: 
@@ -571,7 +572,7 @@ module processor #(
                                 em_loadAddr <= de_loadAddr;
                                 em_storeAddr <= de_storeAddr;
                                 em_dataWrite <= e_storeData;
-                                em_storeMask <= e_storeMask;
+                                selectOut <= e_storeMask;
 
                                 em_rdId <= e_rdId;
                                 em_funct3 <= e_funct3;
