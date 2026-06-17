@@ -189,7 +189,7 @@ module processor #(
     state_t state; 
 
     //what dataRead contains THIS cycle based on what was requested LAST cycle
-    mem_resp_t mem_resp_state;
+    mem_resp_t busOwner;
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
@@ -364,7 +364,7 @@ module processor #(
 
     assign prefetchReset = flushDecode || resetIn;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
+    assign prefetchWriteEnable = (busOwner == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     assign prefetchDataWrite   = {capturedReqPc, dataIn};
@@ -449,7 +449,7 @@ module processor #(
         
                     decodeIsValid <= 0;
                     capturedReqPc <= RESET_ADDRESS;
-                    mem_resp_state <= NOTHING;
+                    busOwner <= NOTHING;
 
                     preventFetch <= 0;
                     selectOut <= 0;
@@ -472,25 +472,29 @@ module processor #(
                                 f_pc <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
                                 capturedReqPc <= RESET_ADDRESS;
-                                mem_resp_state <= NOTHING;
+                                busOwner <= NOTHING;
 
                                 state <= RUN;
                             end
                         RUN:
                             begin
                                 //Schedule readEnable to go down for a fetch if load will and is occuring
-                                if (f_readEnable && !em_readEnable)
+                                if (em_writeEnable)
                                     begin
-                                        mem_resp_state <= FETCH;
-                                        capturedReqPc <= f_addrRead;
+                                        busOwner <= STORE;
                                     end
                                 else if (em_readEnable)
                                     begin
-                                        mem_resp_state <= LOAD;
+                                        busOwner <= LOAD;
+                                    end
+                                else if (f_readEnable)
+                                    begin
+                                        busOwner <= FETCH;
+                                        capturedReqPc <= f_addrRead;
                                     end
                                 else
                                     begin
-                                        mem_resp_state <= NOTHING;
+                                        busOwner <= NOTHING;
                                     end
 
                                 if (prefetchReadEnable)
@@ -605,7 +609,7 @@ module processor #(
 
                                 mw_instr <= m_effectiveInstr;
 
-                                 if (mw_isLoad && mw_rdId != 0)
+                                if (mw_isLoad && mw_rdId != 0)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
@@ -674,7 +678,7 @@ module processor #(
     
     // always_ff @(posedge clock) begin
     //     if (!reset && state == RUN) begin
-    //         if (mem_resp_state == LOAD && de_pc >= 32'h816c) begin
+    //         if (busOwner == LOAD && de_pc >= 32'h816c) begin
     //             $display("MEM cyc=%0d type=LOAD addr=%h data=%h pc=%h",
     //                 cycles,
     //                 em_loadAddr,
