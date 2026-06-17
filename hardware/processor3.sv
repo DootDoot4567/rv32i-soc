@@ -7,6 +7,7 @@ module processor #(
 ) (
     input logic clockIn,
     input logic resetIn,
+    input logic acknowledgedIn,
     input logic [WIDTH - 1:0] dataIn,
     output logic [WIDTH - 1:0] dataOut,
     output logic [ADDR_WIDTH - 1:0] addrOut,
