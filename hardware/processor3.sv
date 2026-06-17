@@ -59,14 +59,13 @@ module processor #(
 
     //Read (BRAM & UART operation) registers (bubbled)
     logic f_readEnable, em_readEnable;
-    logic [ADDR_WIDTH - 1:0] f_addrRead, em_addrRead;
+    logic [ADDR_WIDTH - 1:0] f_addrRead;
 
     //NOT USED
     logic [31:0] em_dataRead;
 
     //Write (BRAM & UART operation) registers (bubbled)
     logic em_writeEnable;
-    //logic [ADDR_WIDTH - 1:0] em_addrWrite;
     logic [31:0] em_dataWrite;
 
     //Boolean flags used by the decoder, processor, and alu
@@ -119,8 +118,8 @@ module processor #(
     logic writeBackEnable;
 
     //Computed memory address for loads and stores
-    logic [31:0] w_loadAddr, de_loadAddr, em_loadAddr, mw_loadAddr;
-    logic [31:0] e_storeAddr, de_storeAddr, em_storeAddr, mw_storeAddr;
+    logic [31:0] de_loadAddr, em_loadAddr, mw_loadAddr;
+    logic [31:0] de_storeAddr, em_storeAddr, mw_storeAddr;
 
     //Word written to word addressed bram and the mask 
     logic [31:0] e_storeData;
@@ -188,7 +187,7 @@ module processor #(
     //Declare the state to start at INITIAL when there is a reset signal
     state_t state; 
 
-    //what dataRead contains THIS cycle based on what was requested LAST cycle
+    //Part of the CPU expecting a response from memory
     mem_resp_t busOwner;
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
@@ -275,8 +274,8 @@ module processor #(
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .loadAddr(w_loadAddr),
-        .storeAddr(e_storeAddr),
+        .loadAddr(mw_loadAddr),
+        .storeAddr(de_storeAddr),
         .rs2(de_rs2),
         .dataRead(dataIn),
         .funct3Load(mw_funct3),
@@ -310,25 +309,13 @@ module processor #(
     assign e_effectiveInstr = de_instr;
     assign m_effectiveInstr = em_instr;
     assign w_effectiveInstr = mw_instr;
-                  
-    //Continously drive the target memory address (used by loads and stores)
-    assign w_loadAddr = mw_loadAddr;
-    assign e_storeAddr = de_storeAddr;
-
+    
     //fetch readEnable and address are computed combinatorially
     assign f_readEnable = !stallFetch;
     assign f_addrRead = controlHazard ? f_nextPc : f_pc;
-
-    // assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
-    // assign addrRead = em_readEnable ? em_loadAddr : f_addrRead;
     
     //Continously drive external BRAM signals using EXEC -> MEM signals
-    assign writeEnableOut = em_writeEnable;
-    assign addrOut = (em_writeEnable) ? em_storeAddr : (em_readEnable ? em_loadAddr : f_addrRead);
     assign dataOut = em_dataWrite;
-
-    //Continously drive the mask for a store to BRAM
-    // assign bramWriteMask = em_storeMask; 
 
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
     assign d_readsRs2 = decodeIsValid && (d_isALUreg || d_isBranch || d_isStore);
@@ -359,13 +346,13 @@ module processor #(
 
     assign writeBackEnable = w_writesRd && mw_rdId != 0;
 
-    assign em_readEnable = em_isLoad;
-    assign em_writeEnable = em_isStore;
-
     assign prefetchReset = flushDecode || resetIn;
 
     assign prefetchWriteEnable = (busOwner == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
+
+    assign strobeOut = (busOwner != NOTHING);
+    assign cycleOut = ((busOwner != NOTHING) && !stallFetch);
 
     assign prefetchDataWrite   = {capturedReqPc, dataIn};
 
@@ -457,7 +444,6 @@ module processor #(
                     em_isStore <= 0; mw_isStore <= 0;
                     em_isBranch <= 0; mw_isBranch <= 0;
 
-                    em_storeMask <= 0;
                     em_writeBackData <= 0; mw_writeBackData <= 0;
 
                     cycles <= 0;
@@ -590,6 +576,9 @@ module processor #(
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
 
+                                em_readEnable <= e_isLoad;
+                                em_writeEnable <= e_isStore;
+
                                 em_loadAddr <= de_loadAddr;
                                 em_storeAddr <= de_storeAddr;
                                 em_dataWrite <= e_storeData;
@@ -603,6 +592,7 @@ module processor #(
                                 em_isBranch <= e_isBranch;
 
                                 em_instr <= e_effectiveInstr;
+                                writeEnableOut <= e_isStore;
 
                                 //Stop reading or writing at the WB state
                                 if (em_isLoad)
