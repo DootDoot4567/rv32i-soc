@@ -369,6 +369,22 @@ module processor #(
 
     assign prefetchDataWrite   = {capturedReqPc, dataIn};
 
+    always_comb
+        begin
+            if (em_writeEnable)
+                begin
+                    addrOut = em_storeAddr;
+                end
+            else if (em_readEnable)
+                begin
+                    addrOut = em_loadAddr;
+                end
+            else
+                begin
+                    addrOut = f_addrRead;
+                end
+        end
+
     always_comb 
         begin
             if ((e_isBranch && e_takeBranch) || e_isJAL)
