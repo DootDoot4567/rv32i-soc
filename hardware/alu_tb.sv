@@ -10,7 +10,6 @@ module alu_tb;
     // ALU outputs
     logic [31:0] aluOut, writeBackDataCandidate, nextPcCandidate;
 
-    // Instantiate your ALU
     alu alu_inst (
         .rs1(rs1),
         .rs2(rs2),
