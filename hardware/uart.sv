@@ -49,6 +49,11 @@ module uart #(
     logic [7:0] rxDataRead;
     logic [7:0] rxDataWrite;
 
+    //Decode internal signals from port
+    logic [1:0] addrSelected;
+    logic [7:0] dataWrite;
+    logic [7:0] dataRead;
+
     uart_rx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_rx_inst (
@@ -96,7 +101,7 @@ module uart #(
         .full(txFull)
     );
 
-    //Read from RX once readEnable goes up
+    //Read from RX if writeEnable is down
     assign rxReadEnable = strobeIn && cycleIn && !writeEnableIn && (addrSelected == 2'b00);
 
     //Once data goes through RX, push it to RX FIFO
@@ -125,7 +130,7 @@ module uart #(
     //UART never causes cpu stalls
     assign stallOut = 1'b0;
 
-     always_ff @(posedge clock)
+    always_ff @(posedge clock)
         begin
             if (reset) 
                 begin
