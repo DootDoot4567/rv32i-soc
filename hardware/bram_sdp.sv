@@ -37,36 +37,38 @@ module bram_sdp #(
         end
     end
 
-    // Port A: Sync Write
-    always_ff @(posedge clockWrite) 
+    //BRAM never tells cpu to stall
+    assign stallOut = 1'b0;
+
+    always_ff @(posedge clock) 
         begin
-            if (writeEnable)
+            acknowledgedOut <= strobeIn && cycleIn;
+
+            if (strobeIn && cycleIn)
                 begin
-                    if (bramWriteMask[0])
+                    if (writeEnableIn)
                         begin
-                            memory[addrWrite][7:0] <= dataWrite[7:0];
+                            if (selectIn[0])
+                                begin
+                                    memory[computedAddr][7:0] <= dataIn[7:0];
+                                end
+                            if (selectIn[1])
+                                begin 
+                                    memory[computedAddr][15:8] <= dataIn[15:8];
+                                end
+                            if (selectIn[2])
+                                begin
+                                    memory[computedAddr][23:16] <= dataIn[23:16];
+                                end
+                            if (selectIn[3]) 
+                                begin
+                                    memory[computedAddr][31:24] <= dataIn[31:24];
+                                end
                         end
-                    if (bramWriteMask[1])
-                        begin 
-                            memory[addrWrite][15:8] <= dataWrite[15:8];
-                        end
-                    if (bramWriteMask[2])
+                    else
                         begin
-                            memory[addrWrite][23:16] <= dataWrite[23:16];
+                            dataOut <= memory[computedAddr];
                         end
-                    if (bramWriteMask[3]) 
-                        begin
-                            memory[addrWrite][31:24] <= dataWrite[31:24];
-                        end
-                end
-        end
-        
-    // Port B: Sync Read
-    always_ff @(posedge clockRead) 
-        begin
-            if (readEnable) 
-                begin
-                    dataRead <= memory[addrRead];
                 end
         end
 endmodule
