@@ -97,7 +97,7 @@ module uart #(
     );
 
     //Read from RX once readEnable goes up
-    assign rxReadEnable = readEnable && (addrSelected == 2'b00);
+    assign rxReadEnable = strobeIn && cycleIn && !writeEnableIn && (addrSelected == 2'b00);
 
     //Once data goes through RX, push it to RX FIFO
     assign rxWriteEnable = rxDataValid && !rxFull;
@@ -106,7 +106,7 @@ module uart #(
     assign interrupt = !rxEmpty;
 
     //Write to FIFO one writeEnable goes up
-    assign txWriteEnable = writeEnable && (addrSelected == 2'b01) && !txFull;
+    assign txWriteEnable = writeEnableIn && (addrSelected == 2'b01) && !txFull;
 
     //At the same cycle txWriteEnable goes up, write to FIFO
     assign txDataWrite = dataWrite;
@@ -117,6 +117,13 @@ module uart #(
 
     //Connect the TX parallel data to the data output from FIFO
     assign txByteData = txDataRead;
+
+    assign addrSelected = addrIn[1:0];
+    assign dataWrite = dataIn[7:0];
+    assign dataOut = {dataRead, dataRead, dataRead, dataRead};
+
+    //UART never causes cpu stalls
+    assign stallOut = 1'b0;
 
     always_comb 
         begin
