@@ -26,6 +26,10 @@ module bram_sdp #(
 
     logic [WIDTH-1:0] memory [DEPTH];
 
+    logic [ADDR_WIDTH - 1:0] computedAddr;
+
+    assign computedAddr = (addrIn - ROM_BASE) >> 2;
+
     initial begin
         if (INIT != "") begin
             $display("Load init file '%s' into bram_sdp.", INIT);
