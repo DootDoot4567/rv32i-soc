@@ -125,25 +125,38 @@ module uart #(
     //UART never causes cpu stalls
     assign stallOut = 1'b0;
 
-    always_comb 
+     always_ff @(posedge clock)
         begin
-            dataRead = 8'b0;
-            if (readEnable)
+            if (reset) 
                 begin
-                    case (addrSelected)
-                        2'b00: dataRead = rxDataRead;
-                        2'b10: dataRead = {interrupt,
-                                           1'b0,
-                                           txFull,
-                                           txEmpty,
-                                           rxFull,
-                                           rxEmpty,
-                                           rxEmpty && !interrupt,
-                                           txActive};
-                        
-                        default: dataRead = 8'b0;
-                    endcase
-                end
+                    dataRead <= 8'h00;
+                    acknowledgedOut <= 1'b0;
+                end 
+            else 
+                begin
+                    acknowledgedOut <= 1'b0;
+
+                    if (strobeIn && cycleIn)
+                        begin
+                            acknowledgedOut <= 1'b1;
+
+                            if (!writeEnableIn) 
+                                begin
+                                    case (addrSelected)
+                                        2'b00: dataRead <= rxDataRead;
+                                        2'b10: dataRead <= {interrupt,
+                                                            1'b0,
+                                                            txFull,
+                                                            txEmpty,
+                                                            rxFull,
+                                                            rxEmpty,
+                                                            rxEmpty && !interrupt,
+                                                            txActive};
+                                        default: dataRead <= 8'h00;
+                                    endcase
+                                end
+                        end
+            end
         end
 
 endmodule
