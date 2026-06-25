@@ -7,6 +7,7 @@ module processor #(
 ) (
     input logic clockIn,
     input logic resetIn,
+    input logic stallIn,
     input logic acknowledgedIn,
     input logic [WIDTH - 1:0] dataIn,
     output logic [WIDTH - 1:0] dataOut,
@@ -311,7 +312,7 @@ module processor #(
     assign w_effectiveInstr = mw_instr;
     
     //fetch readEnable and address are computed combinatorially
-    assign f_readEnable = !stallFetch;
+    assign f_readEnable = !stallFetch && !stallIn;;
     assign f_addrRead = controlHazard ? f_nextPc : f_pc;
     
     //Continously drive external BRAM signals using EXEC -> MEM signals
@@ -348,11 +349,11 @@ module processor #(
 
     assign prefetchReset = flushDecode || resetIn;
 
-    assign prefetchWriteEnable = (busOwner == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
+    assign prefetchWriteEnable = (busOwner == FETCH) && acknowledgedIn && !prefetchFull && !prefetchReset && !em_isLoad && !preventFetch;
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
-    assign strobeOut = (busOwner != NOTHING);
-    assign cycleOut = ((busOwner != NOTHING) && !stallFetch);
+    assign strobeOut = (state == RUN) ? 1'b1 : 1'b0;
+    assign cycleOut = (state == RUN) ? 1'b1 : 1'b0;
 
     assign prefetchDataWrite   = {capturedReqPc, dataIn};
 
