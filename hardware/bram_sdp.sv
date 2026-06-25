@@ -8,17 +8,20 @@ module bram_sdp #(
     parameter WIDTH = 32, 
     parameter DEPTH = 4096, 
     parameter ADDR_WIDTH = 12,
-    parameter INIT = ""
+    parameter INIT = "firmware.mem",
+    parameter ROM_BASE = 32'h00008000
 ) (
-    input logic clockWrite,
-    input logic clockRead,
-    input logic writeEnable,
-    input logic readEnable,
-    input logic [ADDR_WIDTH-1:0] addrWrite,
-    input logic [ADDR_WIDTH-1:0] addrRead,
-    input logic [3:0] bramWriteMask,
-    input logic [WIDTH-1:0] dataWrite,
-    output logic [WIDTH-1:0] dataRead
+    input logic clock,
+    input logic [ADDR_WIDTH - 1:0] addrIn,
+    input logic [WIDTH - 1:0] dataIn,
+    input logic [3:0] selectIn,
+    input logic strobeIn,
+    input logic cycleIn,
+    input logic writeEnableIn,
+
+    output logic stallOut,
+    output logic acknowledgedOut,
+    output logic [WIDTH - 1:0] dataOut
 );
 
     logic [WIDTH-1:0] memory [DEPTH];
