@@ -14,82 +14,162 @@ module soc #(
     localparam ADDR_WIDTH = $clog2(DEPTH);
 
     //Address offsets based on memory map
-    localparam ROM_BASE = 32'h00008000;
-    localparam UART_BASE = 32'h0340;
-    localparam UART_NUM_BYTES = 4;
+    localparam [ADDR_WIDTH - 1:0] ROM_BASE = 32'h00008000;
+    localparam [ADDR_WIDTH - 1:0] UART_BASE = 32'h00000340;
 
-    /////////
-    // BUS //
-    /////////
+    //Interconnect IO masks
+    localparam [ADDR_WIDTH - 1:0] ROM_MASK = 32'hFFFF8000;
+    localparam [ADDR_WIDTH - 1:0] UART_MASK = 32'hFFFFFFFC;
 
-    //CPU
-    logic writeEnable;
-    logic readEnable;
-    logic [ADDR_WIDTH - 1:0] addrRead;
-    logic [ADDR_WIDTH - 1:0] addrWrite;
-    logic [WIDTH - 1:0] dataWrite;
-    logic [WIDTH - 1:0] dataRead;
-    logic [3:0] bramWriteMask;
+    //CPU - Master 1
+    //BRAM - Slave 1 
+    //UART - Slave 2
 
-    //Active Address
-    logic [ADDR_WIDTH - 1:0] address;
+    typedef enum {
+        PROCESSOR,
+        NUM_MASTERS
+    } master_id_t;
 
-    //UART
-    logic [1:0] uartAddr;
+    typedef enum {
+        BRAM,
+        UART, 
+        NUM_SLAVES
+    } slave_id_t;
+    
+    //Declaration of the number of peripherals of our system
+    //By adding to the end of our enums
+
+    //Signals shared by the Masters and Slaves:
+
+    //comes from SYStem CONtroller
+    //clk - Clock
+    //rst - Reset 
+
+    //wE - Write Enable
+    //data_i - Data In
+    //data_o - Data Out
+
+    //Both tag numbers likely not needed
+    //due to FIFOs and no Out-of-Order (OoO) Exec yet
+
+    //tagt_i - Tag Type In
+    //tagt_o - Tag Type Out
+
+    //Implement later...
+    //logic masterErrorIn;
+    //logic masterLockOut;
+    //logic masterRetryIn;
+    //logic masterCycleTagTypeOut;
+    //logic masterAddrTagTypeOut;
+
+    //logic slaveErrorOut;
+    //logic slaveLockIn;
+    //logic slaveRetryOut;
+    //logic slaveCycleTagTypeIn;
+    //logic slaveAddrTagTypeIn;
+
+    //Packed Arrays
+    logic [NUM_MASTERS - 1:0][ADDR_WIDTH - 1:0] masterAddrOut;
+    logic [NUM_MASTERS - 1:0][WIDTH - 1:0] masterDataIn;
+    logic [NUM_MASTERS - 1:0][WIDTH - 1:0] masterDataOut;
+    logic [NUM_MASTERS - 1:0][3:0] masterSelectOut;
+    logic [NUM_MASTERS - 1:0] masterAcknowledgedIn;
+    logic [NUM_MASTERS - 1:0] masterWriteEnableOut;
+    logic [NUM_MASTERS - 1:0] masterStrobeOut;
+    logic [NUM_MASTERS - 1:0] masterCycleOut;
+    logic [NUM_MASTERS - 1:0] masterStallIn;
+
+    logic [NUM_SLAVES - 1:0][ADDR_WIDTH - 1:0] slaveAddrIn;
+    logic [NUM_SLAVES - 1:0][WIDTH - 1:0] slaveDataIn;
+    logic [NUM_SLAVES - 1:0][WIDTH - 1:0] slaveDataOut;
+    logic [NUM_SLAVES - 1:0][3:0] slaveSelectIn;
+    logic [NUM_SLAVES - 1:0] slaveAcknowledgedOut;
+    logic [NUM_SLAVES - 1:0] slaveWriteEnableIn;
+    logic [NUM_SLAVES - 1:0] slaveStrobeIn;
+    logic [NUM_SLAVES - 1:0] slaveCycleIn;
+    logic [NUM_SLAVES - 1:0] slaveStallOut;
 
     logic uartInterrupt;
-    logic uartReadEnable;
-    logic uartWriteEnable;
-    logic uartResponseValid;
-    logic uartRead;
-    logic uartWrite;
+    logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0] slave_io_base;
+    logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0] slave_addr_mask;
 
-    logic [7:0] uartDataRead8;
-    logic [7:0] uartDataWrite8;
-    logic [7:0] uartReadHold;
+    assign slave_io_base = {
+        {UART_BASE},
+        {ROM_BASE}
+    };
 
-    //BRAM
-    logic [ADDR_WIDTH - 1:0] bramAddrRead;
-    logic [ADDR_WIDTH - 1:0] bramAddrWrite;
-    logic [WIDTH - 1:0] bramDataRead;
+    assign slave_addr_mask = { 
+        {UART_MASK},
+        {ROM_MASK}
+    };
 
-    //Chip select signals
-    logic uartSelected;
-    logic bramSelected;
-
-     processor #(
+    processor #(
         .INIT(INIT),
         .WIDTH(WIDTH),
         .DEPTH(DEPTH),
         .ADDR_WIDTH(ADDR_WIDTH),
         .RESET_ADDRESS(ROM_BASE)
     ) processor_inst (
+        .clockIn(clock),
+        .resetIn(reset),
+        .stallIn(masterStallIn[PROCESSOR]),
+        .acknowledgedIn(masterAcknowledgedIn[PROCESSOR]),
+        .dataIn(masterDataIn[PROCESSOR]),
+        .dataOut(masterDataOut[PROCESSOR]),
+        .addrOut(masterAddrOut[PROCESSOR]),
+        .selectOut(masterSelectOut[PROCESSOR]),
+        .writeEnableOut(masterWriteEnableOut[PROCESSOR]),
+        .strobeOut(masterStrobeOut[PROCESSOR]),
+        .cycleOut(masterCycleOut[PROCESSOR])
+    );
+
+    wb_interconn #(
+        .NUM_SLAVES(NUM_SLAVES),
+        .NUM_MASTERS(NUM_MASTERS),
+        .WIDTH(WIDTH),
+        .ADDR_WIDTH(ADDR_WIDTH)
+    ) wb_interconn_inst (
         .clock(clock),
         .reset(reset),
-        .dataRead(dataRead),
-        .writeEnable(writeEnable),
-        .readEnable(readEnable),
-        .addrRead(addrRead),
-        .addrWrite(addrWrite),
-        .dataWrite(dataWrite),
-        .bramWriteMask(bramWriteMask)
+        .masterAddrOut(masterAddrOut),
+        .masterDataOut(masterDataOut),
+        .masterSelectOut(masterSelectOut),
+        .masterWriteEnableOut(masterWriteEnableOut),
+        .masterStrobeOut(masterStrobeOut),
+        .masterCycleOut(masterCycleOut),
+        .masterDataIn(masterDataIn),
+        .masterAcknowledgedIn(masterAcknowledgedIn),
+        .masterStallIn(masterStallIn),
+        .slaveDataOut(slaveDataOut),
+        .slaveAcknowledgedOut(slaveAcknowledgedOut),
+        .slaveStallOut(slaveStallOut),
+        .slaveAddrIn(slaveAddrIn),
+        .slaveDataIn(slaveDataIn),
+        .slaveSelectIn(slaveSelectIn),
+        .slaveWriteEnableIn(slaveWriteEnableIn),
+        .slaveStrobeIn(slaveStrobeIn),
+        .slaveCycleIn(slaveCycleIn),
+        .slave_io_base(slave_io_base),
+        .slave_addr_mask(slave_addr_mask)
     );
 
     bram_sdp #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .INIT(INIT)
+        .INIT(INIT),
+        .ROM_BASE(ROM_BASE)
     ) bram_inst (
-        .clockWrite(clock),
-        .clockRead(clock),
-        .writeEnable(writeEnable && bramSelected),
-        .readEnable(readEnable && bramSelected),
-        .addrRead(bramAddrRead),
-        .addrWrite(bramAddrWrite),
-        .bramWriteMask(bramWriteMask),
-        .dataWrite(dataWrite),
-        .dataRead(bramDataRead)
+        .clock(clock),
+        .addrIn(slaveAddrIn[BRAM]),
+        .dataIn(slaveDataIn[BRAM]),
+        .selectIn(slaveSelectIn[BRAM]),
+        .strobeIn(slaveStrobeIn[BRAM]),
+        .cycleIn(slaveCycleIn[BRAM]),
+        .writeEnableIn(slaveWriteEnableIn[BRAM]),
+        .stallOut(slaveStallOut[BRAM]),
+        .acknowledgedOut(slaveAcknowledgedOut[BRAM]),
+        .dataOut(slaveDataOut[BRAM])
     );
 
     uart #(
@@ -97,77 +177,18 @@ module soc #(
     ) uart_inst (
         .clock(clock),
         .reset(reset),
-        .addrSelected(uartAddr),
-        .writeEnable(uartWriteEnable),
-        .readEnable(uartReadEnable),
-        .dataWrite(uartDataWrite8),
         .rxDataStream(rxDataStream),
-        .interrupt(uartInterrupt),
-        .dataRead(uartDataRead8),
+        .addrIn(slaveAddrIn[UART]),
+        .dataIn(slaveDataIn[UART]),
+        .selectIn(slaveSelectIn[UART]),
+        .strobeIn(slaveStrobeIn[UART]),
+        .cycleIn(slaveCycleIn[UART]),
+        .writeEnableIn(slaveWriteEnableIn[UART]),
+        .interrupt(uartInterrupt), //replace with something, force interrupt instead of polling for uart eventually add dma?
+        .stallOut(slaveStallOut[UART]),
+        .acknowledgedOut(slaveAcknowledgedOut[UART]),
+        .dataOut(slaveDataOut[UART]),
         .txDataStream(txDataStream)
     );
-
-    //Address for decoding (use read address if reading, write address if writing
-    assign address = readEnable ? addrRead : (writeEnable ? addrWrite : 'd0);
-
-    //If UART needs operation, select last 2 bits of either write or read addresses
-    assign uartAddr = uartRead ? addrRead[1:0] : uartWrite ? addrWrite[1:0] : 2'b00;
-
-    //Select uart if read or write is high while enable signal also being high
-    assign uartReadEnable = uartRead && readEnable;
-    assign uartWriteEnable = uartWrite && writeEnable;
-
-    assign uartSelected = (uartReadEnable) || (uartWriteEnable);
-
-    //Outside of IO region (Ideally).
-    //Most likely needs to be fixed to prevent writes to addresses below 0x400
-    assign bramSelected = !uartSelected;
-
-    //Need a UART read if the address to read is within device installation
-    assign uartRead =
-        (addrRead >= UART_BASE) &&
-        (addrRead < UART_BASE + UART_NUM_BYTES);
-
-    //Need a UART write if the address to read is within device installation
-    assign uartWrite =
-        (addrWrite >= UART_BASE) &&
-        (addrWrite < UART_BASE + UART_NUM_BYTES);
-
-    //Select last byte of the data written (from CPU)
-    assign uartDataWrite8 = dataWrite[7:0];
-
-    //Offset the addresses since the .mem file lives in ROM
-    assign bramAddrRead  = (addrRead  - ROM_BASE) >> 2;
-    assign bramAddrWrite = (addrWrite - ROM_BASE) >> 2;
-
-    assign dataRead = (uartReadEnable || uartResponseValid) ? 
-        {uartReadHold, 
-         uartReadHold, 
-         uartReadHold, 
-         uartReadHold} : bramDataRead;
-
-    always_ff @(posedge clock or posedge reset) 
-        begin
-            if (reset) 
-                begin
-                    //If reset, do not respond or hold any data
-                    uartResponseValid <= 1'b0;
-                    uartReadHold  <= 8'h00;
-                end 
-            else 
-                begin
-                    //Creates a one cycle delay to keep data fed into UART stable
-                    //Do not hold any data by default
-                    uartResponseValid <= 1'b0;
-
-                    //If CPU reaches UART's read address and enable is up  
-                    if (uartReadEnable) 
-                        begin
-                            //Hold read data byte for one cycle and respond
-                            uartReadHold  <= uartDataRead8;
-                            uartResponseValid <= 1'b1;
-                        end
-                end
-        end
 
 endmodule
