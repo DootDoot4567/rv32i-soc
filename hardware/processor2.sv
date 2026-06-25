@@ -5,16 +5,17 @@ module processor #(
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
 ) (
-    input logic clock,
-    input logic reset,
-    input logic [WIDTH - 1:0] dataRead,
-
-    output logic writeEnable,
-    output logic readEnable,
-    output logic [ADDR_WIDTH - 1:0] addrRead,
-    output logic [ADDR_WIDTH - 1:0] addrWrite,
-    output logic [WIDTH - 1:0] dataWrite,
-    output logic [3:0] bramWriteMask
+    input logic clockIn,
+    input logic resetIn,
+    input logic stallIn,
+    input logic acknowledgedIn,
+    input logic [WIDTH - 1:0] dataIn,
+    output logic [WIDTH - 1:0] dataOut,
+    output logic [ADDR_WIDTH - 1:0] addrOut,
+    output logic [3:0] selectOut,
+    output logic writeEnableOut,
+    output logic strobeOut,
+    output logic cycleOut
 );
     //NOP = addi zero, zero, 0, using add could have the same behavior,
     //which would make the NOP = 32'h00000033
