@@ -1,18 +1,24 @@
 module uart #(
-    parameter CYCLES_PER_BIT = 217
+    parameter CYCLES_PER_BIT = 217,
+    parameter ADDR_WIDTH = 16,
+    parameter WIDTH = 32
 ) (
     input logic clock,
     input logic reset,
-
-    input logic [1:0] addrSelected,
-    input logic writeEnable,
-    input logic readEnable,
-
-    input logic [7:0] dataWrite,
     input logic rxDataStream,
 
+    input logic [ADDR_WIDTH - 1:0] addrIn,
+    input logic [WIDTH - 1:0] dataIn,
+    input logic [3:0] selectIn,
+    input logic strobeIn,
+    input logic cycleIn,
+    input logic writeEnableIn,
+
+    output logic stallOut,
     output logic interrupt,
-    output logic [7:0] dataRead,
+    output logic acknowledgedOut,
+    output logic [WIDTH - 1:0] dataOut,
+
     output logic txDataStream
 );
     logic txActive;
