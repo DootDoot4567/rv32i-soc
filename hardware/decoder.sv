@@ -61,7 +61,7 @@ module decoder(
     //  The Hardware/Software Interface: RISC-V Edition
     //  and FemtoRV: FROM_BLINKER_TO_RISCV tutorial on GitHub 
 
-    assign Uimm = { instr[31], instr[30:12], 12'b0 };
+    assign Uimm = {instr[31], instr[30:12], 12'b0};
     assign Iimm = {{21{instr[31]}}, instr[30:20]};
     assign Simm = {{21{instr[31]}}, instr[30:25], instr[11:7]};
     assign Bimm = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
