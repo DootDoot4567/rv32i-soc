@@ -50,28 +50,25 @@ module processor #(
     logic [31:0] instr;
 
     //Boolean flags used by the decoder, processor, and alu
-    logic isALUreg;
-    logic isALUimm;
-    logic isBranch;
+    logic isOP;
+    logic isOP_IMM;
+    logic isBRANCH;
     logic isJALR;    
     logic isJAL;    
     logic isAUIPC;    
     logic isLUI;    
-    logic isLoad;    
-    logic isStore;    
+    logic isLOAD;
+    logic isSTORE;
     logic isSYSTEM;
-    logic isEBREAK;
-    logic isECALL;
-    logic isCSRRS;
 
-    //Indexes for input registers and ra register
+    //Indexes for input registers and rd register
     logic [4:0] rs1Id;
     logic [4:0] rs2Id;
     logic [4:0] rdId;
 
     //Optional opcode fields for instruction
-    logic [2:0] funct3;
     logic [6:0] funct7;
+    logic [2:0] funct3;
 
     //Immediate values for different types of instructions
     logic [31:0] Uimm;
@@ -79,10 +76,6 @@ module processor #(
     logic [31:0] Simm;
     logic [31:0] Bimm;
     logic [31:0] Jimm;
-
-    //Register fields from instruction decoding
-    logic [31:0] rs1;
-    logic [31:0] rs2;
 
     //Alu output 
     logic [31:0] aluOut;
@@ -103,6 +96,8 @@ module processor #(
     logic [31:0] loadData;
 
     //CSR Registers
+    logic isCSRRS;
+    logic [31:0] csrData;
     logic [63:0] cycles;
     logic [63:0] instrRetired;
 
@@ -128,58 +123,55 @@ module processor #(
             $readmemh("register_init.mem", registerFile);
         end
     
-    integer i;
+    int i;
 
-    //Instantiate the decoder (purely combinatorial)
+    //Instantiate the decoder (purely combinatorial) -- DECODE STATE
     decoder decoder_inst (
-        .instr,
-        .isALUreg,
-        .isALUimm,
-        .isBranch,
-        .isJALR,
-        .isJAL,
-        .isAUIPC,
-        .isLUI,
-        .isLoad,
-        .isStore,
-        .isSYSTEM,
-        .isEBREAK,
-        .isECALL,
-        .isCSRRS,
-        .rs1Id,
-        .rs2Id,
-        .rdId,
-        .funct3,
-        .funct7,
-        .Uimm,
-        .Iimm,
-        .Simm,
-        .Bimm,
-        .Jimm
+        .instr(instr),
+        .isOP(isOP),
+        .isOP_IMM(isOP_IMM),
+        .isBRANCH(isBRANCH),
+        .isJALR(isJALR),
+        .isJAL(isJAL),
+        .isAUIPC(isAUIPC),
+        .isLUI(isLUI),
+        .isLOAD(isLOAD),
+        .isSTORE(isSTORE),
+        .isSYSTEM(isSYSTEM),
+        .rs1Id(rs1Id),
+        .rs2Id(rs2Id),
+        .rdId(rdId),
+        .funct3(funct3),
+        .funct7(funct7),
+        .Uimm(Uimm),
+        .Iimm(Iimm),
+        .Simm(Simm),
+        .Bimm(Bimm),
+        .Jimm(Jimm)
     );
 
     //Instantiate the alu (purely combinatorial)
     alu alu_inst (
-        .aluIn1,
-        .aluIn2,
+        .aluIn1(aluIn1),
+        .aluIn2(aluIn2),
         .instr5(instr[5]),
         .instr30(instr[30]),
-        .funct3,
-        .pcJALR,
-        .aluOut,
-        .isEQ,
-        .isLTU,
-        .isLT
+        .funct3(funct3),
+        .pcJALR(pcJALR),
+        .aluOut(aluOut),
+        .isEQ(isEQ),
+        .isLTU(isLTU),
+        .isLT(isLT)
     );
 
     //Instantiate the lsu (purely combinatorial)
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .loadAddr,
-        .storeAddr,
-        .rs2,
-        .dataRead,
+        .loadAddr(loadAddr),
+        .storeAddr(storeAddr),
+        .rs2(registerFile[rs2Id]),
+        .dataRead(dataIn),
         .funct3Load(funct3),
         .funct3Store(funct3),
         .storeData(storeData),
@@ -231,6 +223,9 @@ module processor #(
 
                     writeBackEnable <= 0;
 
+                    aluIn1 <= 0;
+                    aluIn2 <= 0;
+
                     cycles <= 0;
                     instrRetired <= 0;
                     isCSRRS <= 0;
@@ -280,7 +275,15 @@ module processor #(
                                             isAUIPC ? Uimm[31:0] :
                                             Bimm[31:0]);
 
-                                if (isEBREAK) 
+                                loadAddr <= registerFile[rs1Id] + Iimm;
+                                storeAddr <= registerFile[rs1Id] + Simm;
+
+                                aluIn1 <= registerFile[rs1Id];
+                                aluIn2 <= (isOP || isBRANCH) ? registerFile[rs2Id] : Iimm;
+
+                                isCSRRS <= (isSYSTEM) && (funct3 == 3'b010);
+
+                                if (instr == EBREAK)
                                     begin
                                         state <= HALT;
                                     end
@@ -292,9 +295,8 @@ module processor #(
                         EXECUTE: 
                             begin
                                 //Compute values for the writeback and the next program counter
-                                if (!isSYSTEM)
-                                    begin
-                                        if ((isBranch && takeBranch) || isJAL)
+
+                                if ((isBRANCH && takeBranch) || isJAL)
                                             begin
                                                 pc <= pcPlusImm;
                                             end
@@ -304,41 +306,29 @@ module processor #(
                                             end
                                         else
                                             begin
-                                                pc <= pcPlus4;
+                                        pc <= pc + 4;
                                             end
-                                    end
 
-                                if (isJAL || isJALR) 
-                                    begin
-                                        writeBackData <= pcPlus4;
-                                    end
-                                else if (isLUI)
-                                    begin
-                                        writeBackData <= Uimm;
-                                    end
-                                else if (isAUIPC)
-                                    begin 
-                                        writeBackData <= pcPlusImm;
-                                    end
-                                else if (isCSRRS)
-                                    begin
-                                        writeBackData <= csrData;
-                                    end
-                                else
-                                    begin
-                                        writeBackData <= aluOut;
-                                    end
+                                case(1)
+                                    isJAL: writeBackData <= pc + 4;
+                                    isJALR: writeBackData <= pc + 4;
+                                    isLUI: writeBackData <= Uimm;
+                                    isAUIPC: writeBackData <= pcPlusImm;
+                                    isCSRRS: writeBackData <= csrData;
+
+                                    default: writeBackData <= aluOut;
+                                endcase
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
-                                if (isLoad) 
+                                if (isLOAD)
                                     begin
                                         addrOut <= loadAddr;
                                         writeEnableOut <= 0;
                                         strobeOut <= 1;
                                         cycleOut <= 1;
                                     end
-                                else if(isStore) 
+                                else if(isSTORE)
                                     begin
                                         addrOut <= storeAddr;
                                         dataOut <= storeData;
@@ -348,8 +338,14 @@ module processor #(
                                         cycleOut <= 1;
                                     end
 
-                                //Schedule a writeback by driving writeBackEnable for one cycle
-                                writeBackEnable <= (!isBranch && !isStore);
+                                //Schedule a writeback by driving writeBackEnable
+                                writeBackEnable <= (isOP ||
+                                                    isOP_IMM ||
+                                                    isJAL ||
+                                                    isJALR ||
+                                                    isLUI ||
+                                                    isAUIPC ||
+                                                    isCSRRS);
                                 
                                 state <= MEMORY;	          
                             end
@@ -366,7 +362,7 @@ module processor #(
                             end
                         WRITE_BACK:
                             begin
-                                if (isLoad && rdId != 0)
+                                if (isLOAD && rdId != 0 && acknowledgedIn)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[rdId] <= loadData;
