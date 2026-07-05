@@ -1,5 +1,4 @@
 module processor #(
-    parameter INIT = "",
     parameter WIDTH = 32,
     parameter DEPTH = 16384,
     parameter ADDR_WIDTH = 32,
@@ -7,7 +6,7 @@ module processor #(
 ) (
     input logic clockIn,
     input logic resetIn,
-    input logic stallIn,
+    input logic stallIn, //not used because processor not pipelined
     input logic acknowledgedIn,
     input logic [WIDTH - 1:0] dataIn,
     output logic [WIDTH - 1:0] dataOut,
@@ -17,11 +16,22 @@ module processor #(
     output logic strobeOut,
     output logic cycleOut
 );
-    //Program counter and different wires to drive different pc
-    //values at different states
-    logic [31:0] pc = 0;
-    logic [31:0] pcPlus4;
+    //Constants
+
+    //NOP = addi zero, zero, 0, using add could have the same behavior?,
+    //which would make the NOP = 32'h00000033
+    localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
+
+    //Program counters
+
+    //address being requested this cycle
+    logic [31:0] pc;
+
+    //branch, jump or auipc targets computed in DE state
     logic [31:0] pcPlusImm;
+
+    //JALR target from alu
     logic [31:0] pcJALR;
 
     //Flag to decide to branch or not
@@ -36,8 +46,8 @@ module processor #(
     logic [31:0] aluIn1;
     logic [31:0] aluIn2;
 
+    //Instruction register
     logic [31:0] instr;
-    logic [31:0] fetchedInstruction;
 
     //Boolean flags used by the decoder, processor, and alu
     logic isALUreg;
@@ -107,7 +117,7 @@ module processor #(
         WRITE_BACK
     } state_t;
 
-    //Declaring the state to start at INITIAL when there is a reset signal
+    //Declare the state to start at INITIAL when there is a reset signal
     state_t state; 
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
@@ -172,33 +182,10 @@ module processor #(
         .dataRead,
         .funct3Load(funct3),
         .funct3Store(funct3),
-        .storeData,
-        .loadData,
-        .storeMask
+        .storeData(storeData),
+        .loadData(loadData),
+        .storeMask(storeMask)
     );
-
-    //Continously drive ALU inputs
-    assign aluIn1 = rs1;
-    assign aluIn2 = (isALUreg || isBranch) ? rs2 : Iimm;
-
-    //Continously drive the target memory address (used by loads and stores)
-    assign loadAddr  = rs1 + Iimm;
-    assign storeAddr = rs1 + Simm;
-
-    //Continously drive both registers from decoded idx 
-    assign rs1 = registerFile[rs1Id];
-    assign rs2 = registerFile[rs2Id];
-
-    //Continously drive the instruction fetched
-    assign instr = (state == DECODE) ? dataRead : fetchedInstruction;
-
-    //Continously drive the value of the pc for next instruction
-    assign pcPlus4 = pc + 4;
-
-    //Continously drive the mask for a store to BRAM
-    //assign bramWriteMask = storeMask;
-
-    logic [31:0] csrData;
 
     always_comb
         begin
@@ -227,10 +214,10 @@ module processor #(
             endcase
         end
 
-    //Reset control
-    always_ff @(posedge clock)
+    //Reset control + FSM
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
@@ -238,17 +225,23 @@ module processor #(
                         end
 
                     pc <= RESET_ADDRESS;
-                    addrRead <= RESET_ADDRESS;
-                    readEnable <= 1;  
 
-                    writeEnable <= 0;  
-                    addrWrite <= 0;
-                    dataWrite <= 0; 
+                    loadAddr <= 0;
+                    storeAddr <= 0;
 
                     writeBackEnable <= 0;
 
                     cycles <= 0;
                     instrRetired <= 0;
+                    isCSRRS <= 0;
+
+                    //Set up initial read
+                    addrOut <= RESET_ADDRESS;
+                    dataOut <= 0;
+                    selectOut <= 0;
+                    writeEnableOut <= 0;
+                    strobeOut <= 1;
+                    cycleOut <= 1;
 
                     state <= INITIAL;
                 end
@@ -263,20 +256,24 @@ module processor #(
                             end
                         INITIAL:
                             begin
+                                //Prevent read at posedge of next clock cycle
+                                strobeOut <= 0;
+                                cycleOut <= 0;
+
                                 state <= FETCH;
                             end
                         FETCH:
                             begin
-                                //Schedule readEnable to go down at posedge of next clock cycle
-                                readEnable <= 0;
+                                //Register data response from BRAM
+                                if (acknowledgedIn)
+                                    begin
+                                        instr <= dataIn;
+                                    end
+
                                 state <= DECODE;
                             end
                         DECODE: 
                             begin
-                                //Get instruction from BRAM module here
-
-                                fetchedInstruction <= dataRead;
-
                                 //Calculate Branch, JAL and AUIPC targets here
                                 //PC value + immediate based on isTYPE flags
                                 pcPlusImm <= pc + (isJAL ? Jimm[31:0] :
@@ -336,15 +333,19 @@ module processor #(
                                 //otherwise schedule a memory write
                                 if (isLoad) 
                                     begin
-                                        readEnable <= 1;
-                                        addrRead <= loadAddr;
+                                        addrOut <= loadAddr;
+                                        writeEnableOut <= 0;
+                                        strobeOut <= 1;
+                                        cycleOut <= 1;
                                     end
                                 else if(isStore) 
                                     begin
-                                        addrWrite <= storeAddr;
-                                        dataWrite <= storeData;
-                                        bramWriteMask <= storeMask;
-                                        writeEnable <= 1;
+                                        addrOut <= storeAddr;
+                                        dataOut <= storeData;
+                                        selectOut <= storeMask;
+                                        writeEnableOut <= 1;
+                                        strobeOut <= 1;
+                                        cycleOut <= 1;
                                     end
 
                                 //Schedule a writeback by driving writeBackEnable for one cycle
@@ -354,15 +355,12 @@ module processor #(
                             end
                         MEMORY:
                             begin
-                                //Stop reading or writing at the WB state
-                                if (isLoad)
-                                    begin
-                                        readEnable <= 0;
-                                    end
-                                else if (isStore)
-                                    begin
-                                        writeEnable <= 0;
-                                    end
+                                //Read next instruction (PC updated in EXEC)
+                                addrOut <= pc;
+                                writeEnableOut <= 0;
+
+                                strobeOut <= 1;
+                                cycleOut <= 1;
 
                                 state <= WRITE_BACK;
                             end
@@ -380,38 +378,25 @@ module processor #(
                                         registerFile[rdId] <= writeBackData;
                                     end
 
-                                //Read next instruction (PC updated in EXEC)
-                                addrRead <= pc;
-                                readEnable <= 1;
+                                if (instr != NOP)
+                                    begin
+                                        instrRetired <= instrRetired + 1;
 
-                                //Stop writeback at next clock cycle
+                                        // $display("%h", instr);
+                                    end
+
+                                //at next clock cycle:
+                                //Stop writeback
                                 writeBackEnable <= 0;
+
+                                //Prevent read
+                                strobeOut <= 0;
+                                cycleOut <= 0;
 
                                 state <= FETCH;
                             end
                     endcase
                 end
         end
-
-    // `ifdef SIMULATION
-    //     always @(posedge clock) 
-    //         begin
-    //             $display("PC=%0d instr=%h", pc, instr);
-    //             $display("Instruction opcode %b", dataRead[6:0]);
-                
-    //             case (1'b1)
-    //                 isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", rdId, rs1Id, rs2Id, funct3);
-    //                 isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", rdId, rs1Id, Iimm, funct3);
-    //                 isLoad:   $display("LOAD");
-    //                 isStore:  $display("STORE");
-    //                 isBranch: $display("BRANCH");
-    //                 isJAL:    $display("JAL");
-    //                 isJALR:   $display("JALR");
-    //                 isLUI:    $display("LUI");
-    //                 isAUIPC:  $display("AUIPC");
-    //                 isSYSTEM: $display("SYSTEM (EBREAK)");
-    //             endcase
-    //         end
-    // `endif
 
 endmodule
