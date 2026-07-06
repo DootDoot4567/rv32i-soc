@@ -1,6 +1,5 @@
-module processor #(
+module processor1 #(
     parameter WIDTH = 32,
-    parameter DEPTH = 16384,
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
 ) (
@@ -96,10 +95,10 @@ module processor #(
     logic [31:0] loadData;
 
     //CSR Registers
-    logic isCSRRS;
     logic [31:0] csrData;
     logic [63:0] cycles;
     logic [63:0] instrRetired;
+    logic isCSRRS;
 
     //FSM states
     typedef enum {
@@ -118,11 +117,6 @@ module processor #(
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
 
-    initial 
-        begin
-            $readmemh("register_init.mem", registerFile);
-        end
-    
     int i;
 
     //Instantiate the decoder (purely combinatorial) -- DECODE STATE
@@ -391,6 +385,8 @@ module processor #(
 
                                 state <= FETCH;
                             end
+
+                        default: state <= HALT;
                     endcase
                 end
         end
