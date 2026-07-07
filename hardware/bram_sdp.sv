@@ -1,6 +1,3 @@
-`default_nettype none
-`timescale 1ns / 1ps
-
 // This code is based on Project F's line drawing tutorial (projectF.io)
 // with modifications and cleanup
 
@@ -48,22 +45,14 @@ module bram_sdp #(
                 begin
                     if (writeEnableIn)
                         begin
-                            if (selectIn[0])
-                                begin
-                                    memory[computedAddr][7:0] <= dataIn[7:0];
-                                end
-                            if (selectIn[1])
-                                begin 
-                                    memory[computedAddr][15:8] <= dataIn[15:8];
-                                end
-                            if (selectIn[2])
-                                begin
-                                    memory[computedAddr][23:16] <= dataIn[23:16];
-                                end
-                            if (selectIn[3]) 
-                                begin
-                                    memory[computedAddr][31:24] <= dataIn[31:24];
-                                end
+                            case (selectIn)
+                                4'b0001: memory[computedAddr][7:0] <= dataIn[7:0];
+                                4'b0010: memory[computedAddr][15:8] <= dataIn[15:8];
+                                4'b0100: memory[computedAddr][23:16] <= dataIn[23:16];
+                                4'b1000: memory[computedAddr][31:24] <= dataIn[31:24];
+
+                                default: memory[computedAddr][7:0] <= dataIn[7:0];
+                            endcase
                         end
                     else
                         begin
