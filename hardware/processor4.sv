@@ -125,7 +125,7 @@ module processor4 #(
 
     //Word written to word addressed bram and the mask 
     logic [31:0] e_storeData;
-    logic [3:0] e_storeMask, em_storeMask;
+    logic [3:0] e_storeMask;//, em_storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] w_loadData;
@@ -189,18 +189,18 @@ module processor4 #(
     } state_t;
 
     //Memory response tracking "state"
-    //tells us what dataRead contains THIS cycle,
-    //based on what was requested LAST cycle
     typedef enum {
         NOTHING,
         FETCH, 
-        LOAD
+        LOAD,
+        STORE
     } mem_resp_t;
 
     //Declare the state to start at INITIAL when there is a reset signal
     state_t state; 
 
-    mem_resp_t mem_resp_state;
+    //Part of the CPU expecting a response from memory
+    mem_resp_t busOwner;
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
@@ -289,7 +289,7 @@ module processor4 #(
         .loadAddr(w_loadAddr),
         .storeAddr(e_storeAddr),
         .rs2(e_rs2Forwarded),
-        .dataRead(dataRead),
+        .dataRead(dataIn),
         .funct3Load(mw_funct3),
         .funct3Store(e_funct3),
         .storeData(e_storeData),
@@ -302,7 +302,7 @@ module processor4 #(
         .DEPTH(16),
         .WIDTH(64)
     ) fifo_inst (
-        .clock,
+        .clock(clockIn),
         .reset(prefetchReset),
         .writeEnable(prefetchWriteEnable),
         .readEnable(prefetchReadEnable),
@@ -328,7 +328,7 @@ module processor4 #(
         .w_writesRd(w_writesRd),
         .em_writeBackData(em_writeBackData),
         .mw_writeBackData(mw_writeBackData),
-        .mw_isLoad(mw_isLoad),
+        .mw_isLoad(mw_isLOAD),
         .w_loadData(w_loadData),
         .d_rs1Forwarded(d_rs1Forwarded),
         .d_rs2Forwarded(d_rs2Forwarded),
@@ -355,19 +355,8 @@ module processor4 #(
     // assign d_pc = pcPrefetched;
 
     //fetch readEnable and address are computed combinatorially
-    assign f_readEnable = !stallFetch;
+    assign f_readEnable = !stallFetch && !stallIn;
     assign f_addrRead = controlHazard ? f_nextPc : f_pc;
-
-    assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
-    assign addrRead = em_readEnable ? em_loadAddr : f_addrRead;
-    
-    //Continously drive external BRAM signals using EXEC -> MEM signals
-    assign writeEnable = em_writeEnable;
-    assign addrWrite = em_storeAddr;
-    assign dataWrite = em_dataWrite;
-
-    //Continously drive the mask for a store to BRAM
-    assign bramWriteMask = em_storeMask; 
 
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
     assign d_readsRs2 = decodeIsValid && (d_isOP || d_isBRANCH || d_isSTORE);
@@ -391,14 +380,30 @@ module processor4 #(
 
     assign writeBackEnable = w_writesRd && mw_rdId != 0;
 
-    assign em_readEnable = em_isLoad;
-    assign em_writeEnable = em_isStore;
+    // assign em_readEnable = em_isLOAD;
+    // assign em_writeEnable = em_isSTORE;
 
-    assign prefetchReset = flushDecode || reset;
+    assign prefetchReset = flushDecode || resetIn;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_isLOAD && !preventFetch;
-    assign prefetchDataWrite   = {capturedReqPc, dataRead};
+    assign prefetchWriteEnable = (busOwner == FETCH) && acknowledgedIn && !prefetchFull && !prefetchReset && !em_isLOAD && !preventFetch;
+    assign prefetchDataWrite   = {capturedReqPc, dataIn};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
+
+    assign strobeOut = (state == RUN) ? 1'b1 : 1'b0;
+    assign cycleOut = (state == RUN) ? 1'b1 : 1'b0;
+
+    assign e_isCSRRS = e_isSYSTEM && (e_funct3 == 3'b010);
+
+    always_comb 
+        begin
+            case(1)
+                em_writeEnable: addrOut = em_storeAddr;
+                em_readEnable: addrOut = em_loadAddr;
+                // f_readEnable: addrOut = f_addrRead;
+
+                default: addrOut = f_addrRead;
+            endcase
+        end
 
     always_comb 
         begin
@@ -460,9 +465,9 @@ module processor4 #(
         end
 
     //Reset control + FSM
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
@@ -488,15 +493,23 @@ module processor4 #(
                     em_isSTORE <= 0; mw_isSTORE <= 0;
                     em_isBRANCH <= 0; mw_isBRANCH <= 0;
 
-                    em_storeMask <= 0;
+                    selectOut <= 0;
                     em_writeBackData <= 0; mw_writeBackData <= 0;
+
+                    em_readEnable <= 0;
+                    em_writeEnable <= 0;
 
                     cycles <= 0;
                     instrRetired <= 0;
+
+                    //Set up initial read
+                    dataOut <= 0;
+                    selectOut <= 0;
+                    writeEnableOut <= 0;
         
                     decodeIsValid <= 0;
                     capturedReqPc <= RESET_ADDRESS;
-                    mem_resp_state <= NOTHING;
+                    busOwner <= NOTHING;
 
                     preventFetch <= 0;
 
@@ -516,7 +529,7 @@ module processor4 #(
                                 f_pc <= RESET_ADDRESS;
                                 fd_pc <= RESET_ADDRESS;
                                 capturedReqPc <= RESET_ADDRESS;
-                                mem_resp_state <= NOTHING;
+                                busOwner <= NOTHING;
 
                                 state <= RUN;
                             end
@@ -527,18 +540,26 @@ module processor4 #(
 
                                 // Always capture the fetch address when fetch is requested,
                                 // regardless of memory operations in flight
-                                if (f_readEnable && !em_readEnable)
+                                if (stallIn)
                                     begin
-                                        mem_resp_state <= FETCH;
-                                        capturedReqPc <= f_addrRead;
+                                        busOwner <= busOwner;
+                                    end
+                                else if (em_writeEnable)
+                                    begin
+                                        busOwner <= STORE;
                                     end
                                 else if (em_readEnable)
                                     begin
-                                        mem_resp_state <= LOAD;
+                                        busOwner <= LOAD;
+                                    end
+                                else if (f_readEnable)
+                                    begin
+                                        busOwner <= FETCH;
+                                        capturedReqPc <= f_addrRead;
                                     end
                                 else
                                     begin
-                                        mem_resp_state <= NOTHING;
+                                        busOwner <= NOTHING;
                                     end
 
                                 if (prefetchReadEnable)
@@ -554,7 +575,7 @@ module processor4 #(
 
                                 if (flushExecute) 
                                     begin
-                                        de_pc <= 0;
+                                        de_pc <= de_pc;
                                         de_pcPlusImm <= 0;
                                         de_instr <= NOP;
 
@@ -597,8 +618,8 @@ module processor4 #(
 
                                 em_loadAddr <= de_loadAddr;
                                 em_storeAddr <= de_storeAddr;
-                                em_dataWrite <= e_storeData;
-                                em_storeMask <= e_storeMask;
+                                dataOut <= e_storeData;
+                                selectOut <= e_storeMask;
 
                                 em_rdId <= e_rdId;
                                 em_funct3 <= e_funct3;
@@ -608,6 +629,10 @@ module processor4 #(
                                 em_isBRANCH <= e_isBRANCH;
 
                                 em_instr <= e_effectiveInstr;
+
+                                em_readEnable <= e_isLOAD;
+                                em_writeEnable <= e_isSTORE;
+                                writeEnableOut <= e_isSTORE;
 
                                 //Stop reading or writing at the WB state
                                 if (em_isLOAD)
@@ -635,7 +660,6 @@ module processor4 #(
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
-                                        // mw_isLoad <= 0;
                                     end
                                 else if(writeBackEnable) 
                                     begin
