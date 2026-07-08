@@ -22,6 +22,7 @@ module processor #(
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
 
     //Program counters
 
@@ -71,15 +72,15 @@ module processor #(
     logic [31:0] em_dataWrite;
 
     //Boolean flags used by the decoder, processor, and alu
-    logic d_isALUreg, e_isALUreg; 
-    logic d_isALUimm, e_isALUimm;
-    logic d_isBranch, e_isBranch, em_isBranch, mw_isBranch;
+    logic d_isOP, e_isOP; 
+    logic d_isOP_IMM, e_isOP_IMM;
+    logic d_isBRANCH, e_isBRANCH, em_isBRANCH, mw_isBRANCH;
     logic d_isJALR, e_isJALR;    
     logic d_isJAL, e_isJAL;    
     logic d_isAUIPC, e_isAUIPC;    
     logic d_isLUI, e_isLUI;    
-    logic d_isLoad, e_isLoad, em_isLoad, mw_isLoad;  
-    logic d_isStore, e_isStore, em_isStore, mw_isStore;
+    logic d_isLOAD, e_isLOAD, em_isLOAD, mw_isLOAD;  
+    logic d_isSTORE, e_isSTORE, em_isSTORE, mw_isSTORE;
     logic d_isSYSTEM, e_isSYSTEM;
 
     //Indexes for input registers and ra register
@@ -99,9 +100,10 @@ module processor #(
     logic [31:0] d_Jimm, e_Jimm;
 
     //Environment defined variables
-    logic d_isEBREAK, e_isEBREAK;
-    logic d_isECALL, e_isECALL;
-    logic d_isCSRRS, e_isCSRRS;
+    // logic d_isEBREAK, e_isEBREAK;
+    // logic d_isECALL, e_isECALL;
+    // logic d_isCSRRS, 
+    logic e_isCSRRS;
 
     //Register fields from instruction decoding
     logic [31:0] de_rs1, de_rs2;
@@ -215,19 +217,19 @@ module processor #(
     //Instantiate the decoder (purely combinatorial) -- DECODE STATE
     decoder decoder_inst_d (
         .instr(d_effectiveInstr),
-        .isALUreg(d_isALUreg),
-        .isALUimm(d_isALUimm),
-        .isBranch(d_isBranch),
+        .isOP(d_isOP),
+        .isOP_IMM(d_isOP_IMM),
+        .isBRANCH(d_isBRANCH),
         .isJALR(d_isJALR),
         .isJAL(d_isJAL),
         .isAUIPC(d_isAUIPC),
         .isLUI(d_isLUI),
-        .isLoad(d_isLoad),
-        .isStore(d_isStore),
+        .isLOAD(d_isLOAD),
+        .isSTORE(d_isSTORE),
         .isSYSTEM(d_isSYSTEM),
-        .isEBREAK(d_isEBREAK),
-        .isECALL(d_isECALL),
-        .isCSRRS(d_isCSRRS),
+        // .isEBREAK(d_isEBREAK),
+        // .isECALL(d_isECALL),
+        // .isCSRRS(d_isCSRRS),
         .rs1Id(d_rs1Id),
         .rs2Id(d_rs2Id),
         .rdId(d_rdId),
@@ -243,19 +245,19 @@ module processor #(
     //Instantiate the decoder (purely combinatorial) -- EXEC STATE
     decoder decoder_inst_e (
         .instr(e_effectiveInstr),
-        .isALUreg(e_isALUreg),
-        .isALUimm(e_isALUimm),
-        .isBranch(e_isBranch),
+        .isOP(e_isOP),
+        .isOP_IMM(e_isOP_IMM),
+        .isBRANCH(e_isBRANCH),
         .isJALR(e_isJALR),
         .isJAL(e_isJAL),
         .isAUIPC(e_isAUIPC),
         .isLUI(e_isLUI),
-        .isLoad(e_isLoad),
-        .isStore(e_isStore),
+        .isLOAD(e_isLOAD),
+        .isSTORE(e_isSTORE),
         .isSYSTEM(e_isSYSTEM),
-        .isEBREAK(e_isEBREAK),
-        .isECALL(e_isECALL),
-        .isCSRRS(e_isCSRRS),
+        // .isEBREAK(e_isEBREAK),
+        // .isECALL(e_isECALL),
+        // .isCSRRS(e_isCSRRS),
         .rs1Id(e_rs1Id),
         .rs2Id(e_rs2Id),
         .rdId(e_rdId),
@@ -338,7 +340,7 @@ module processor #(
 
     //Continously drive ALU inputs
     assign aluIn1 = e_rs1Forwarded;
-    assign aluIn2 = (e_isALUreg || e_isBranch) ? e_rs2Forwarded : e_Iimm;
+    assign aluIn2 = (e_isOP || e_isBRANCH) ? e_rs2Forwarded : e_Iimm;
     
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
@@ -370,20 +372,20 @@ module processor #(
     assign bramWriteMask = em_storeMask; 
 
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
-    assign d_readsRs2 = decodeIsValid && (d_isALUreg || d_isBranch || d_isStore);
+    assign d_readsRs2 = decodeIsValid && (d_isOP || d_isBRANCH || d_isSTORE);
 
-    assign e_writesRd = (e_effectiveInstr != NOP) && !e_isStore && !e_isBranch;
-    assign m_writesRd = (m_effectiveInstr != NOP) && !em_isStore && !em_isBranch;
-    assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isStore && !mw_isBranch;
+    assign e_writesRd = (e_effectiveInstr != NOP) && !e_isSTORE && !e_isBRANCH;
+    assign m_writesRd = (m_effectiveInstr != NOP) && !em_isSTORE && !em_isBRANCH;
+    assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isSTORE && !mw_isBRANCH;
 
     assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && (d_rs1Id == e_rdId) && e_writesRd;
     assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && (d_rs2Id == e_rdId) && e_writesRd;
 
-    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch);
-    assign structuralHazard = em_readEnable || em_writeEnable;
+    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBRANCH);
+    assign structuralHazard = em_isLOAD || em_isSTORE;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLoad;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLOAD;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
@@ -396,15 +398,15 @@ module processor #(
 
     assign prefetchReset = flushDecode || reset;
 
-    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_readEnable && !preventFetch;
+    assign prefetchWriteEnable = (mem_resp_state == FETCH) && !prefetchFull && !prefetchReset && !em_isLOAD && !preventFetch;
     assign prefetchDataWrite   = {capturedReqPc, dataRead};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     always_comb 
         begin
             case (1)
-                e_isALUreg: e_result = e_aluOut;
-                e_isALUimm: e_result = e_aluOut;
+                e_isOP: e_result = e_aluOut;
+                e_isOP_IMM: e_result = e_aluOut;
                 e_isJAL: e_result = de_pc + 4;
                 e_isLUI: e_result = e_Uimm;
                 e_isJALR: e_result = de_pc + 4;
@@ -418,7 +420,7 @@ module processor #(
 
     always_comb 
         begin
-            if ((e_isBranch && e_takeBranch) || e_isJAL)
+            if ((e_isBRANCH && e_takeBranch) || e_isJAL)
                 begin
                     f_nextPc = de_pcPlusImm;
                 end
@@ -484,9 +486,9 @@ module processor #(
                     em_rdId <= 0; mw_rdId <= 0;
                     em_funct3 <= 0; mw_funct3 <= 0;
 
-                    em_isLoad <= 0; mw_isLoad <= 0;
-                    em_isStore <= 0; mw_isStore <= 0;
-                    em_isBranch <= 0; mw_isBranch <= 0;
+                    em_isLOAD <= 0; mw_isLOAD <= 0;
+                    em_isSTORE <= 0; mw_isSTORE <= 0;
+                    em_isBRANCH <= 0; mw_isBRANCH <= 0;
 
                     em_storeMask <= 0;
                     em_writeBackData <= 0; mw_writeBackData <= 0;
@@ -603,18 +605,18 @@ module processor #(
                                 em_rdId <= e_rdId;
                                 em_funct3 <= e_funct3;
 
-                                em_isLoad <= e_isLoad;
-                                em_isStore <= e_isStore;
-                                em_isBranch <= e_isBranch;
+                                em_isLOAD <= e_isLOAD;
+                                em_isSTORE <= e_isSTORE;
+                                em_isBRANCH <= e_isBRANCH;
 
                                 em_instr <= e_effectiveInstr;
 
                                 //Stop reading or writing at the WB state
-                                if (em_isLoad)
+                                if (em_isLOAD)
                                     begin
                                         mw_loadAddr <= em_loadAddr;
                                     end
-                                else if (em_isStore)
+                                else if (em_isSTORE)
                                     begin
                                         mw_storeAddr <= em_storeAddr;
                                     end
@@ -622,15 +624,16 @@ module processor #(
                                 mw_rdId <= em_rdId;
                                 mw_funct3 <= em_funct3;
 
-                                mw_isLoad <= em_isLoad;
-                                mw_isStore <= em_isStore;
-                                mw_isBranch <= em_isBranch;
+                                mw_isLOAD <= em_isLOAD;
+                                mw_isSTORE <= em_isSTORE;
+                                mw_isBRANCH <= em_isBRANCH;
+                    
 
                                 mw_writeBackData <= em_writeBackData;
 
                                 mw_instr <= m_effectiveInstr;
 
-                                if (mw_isLoad && mw_rdId != 0)
+                                if (mw_isLOAD && mw_rdId != 0)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
@@ -648,7 +651,7 @@ module processor #(
                                         instrRetired <= instrRetired + 1;
                                     end
 
-                                if (e_isEBREAK || d_isEBREAK) 
+                                if (e_effectiveInstr == EBREAK) 
                                     begin
                                         state <= HALT;
                                     end
@@ -657,6 +660,8 @@ module processor #(
                                         state <= RUN;
                                     end 
                             end
+                        
+                        default: state <= HALT;
                     endcase
                 end
         end
