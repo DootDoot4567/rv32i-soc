@@ -25,7 +25,7 @@ module bram_sdp #(
 
     logic [ADDR_WIDTH - 1:0] computedAddr;
 
-    assign computedAddr = (addrIn - ROM_BASE) >> 2;
+    assign computedAddr = (addrIn >= 32'h8000) ? ((addrIn - ROM_BASE) >> 2) : addrIn >> 2;
 
     initial begin
         if (INIT != "") begin
@@ -45,14 +45,15 @@ module bram_sdp #(
                 begin
                     if (writeEnableIn)
                         begin
-                            case (selectIn)
-                                4'b0001: memory[computedAddr][7:0] <= dataIn[7:0];
-                                4'b0010: memory[computedAddr][15:8] <= dataIn[15:8];
-                                4'b0100: memory[computedAddr][23:16] <= dataIn[23:16];
-                                4'b1000: memory[computedAddr][31:24] <= dataIn[31:24];
-
-                                default: memory[computedAddr][7:0] <= dataIn[7:0];
-                            endcase
+                            begin
+                                for (int i = 0; i < (WIDTH >> 2); i++)
+                                    begin
+                                        if (selectIn[i])
+                                            begin
+                                                memory[computedAddr][i*8 +: 8] <= dataIn[i*8 +: 8];
+                                            end
+                                    end
+                            end
                         end
                     else
                         begin
