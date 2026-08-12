@@ -25,7 +25,6 @@ module uart #(
 
     //Parallel data from TX and RX
     logic [7:0] txByteData;
-    logic [7:0] rxByteData;
 
     //Data availability signals for TX and RX
     logic txDataValid;
@@ -124,11 +123,22 @@ module uart #(
     assign txByteData = txDataRead;
 
     assign addrSelected = addrIn[1:0];
-    assign dataWrite = dataIn[7:0];
     assign dataOut = {dataRead, dataRead, dataRead, dataRead};
 
     //UART never causes cpu stalls
     assign stallOut = 1'b0;
+
+    always_comb
+        begin
+            case (selectIn)
+                4'b0001: dataWrite = dataIn[7:0];
+                4'b0010: dataWrite = dataIn[15:8];
+                4'b0100: dataWrite = dataIn[23:16];
+                4'b1000: dataWrite = dataIn[31:24];
+
+                default: dataWrite = dataIn[7:0];
+            endcase
+        end
 
     always_ff @(posedge clock)
         begin
