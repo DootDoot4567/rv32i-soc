@@ -1,5 +1,3 @@
-`default_nettype none
-
 // Synchronous FIFO
 //
 // Circular buffer with read and write pointers

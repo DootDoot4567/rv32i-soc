@@ -1,19 +1,16 @@
 module decoder(
     input logic [31:0] instr,
 
-    output logic isALUreg,
-    output logic isALUimm,
-    output logic isBranch,
+    output logic isOP,
+    output logic isOP_IMM,
+    output logic isBRANCH,
     output logic isJALR,
     output logic isJAL,
     output logic isAUIPC,
     output logic isLUI,
-    output logic isLoad,
-    output logic isStore,
+    output logic isLOAD,
+    output logic isSTORE,
     output logic isSYSTEM,
-    output logic isEBREAK,
-    output logic isCSRRS,
-    output logic isECALL,
 
     output logic [4:0] rs1Id,
     output logic [4:0] rs2Id,
@@ -30,25 +27,21 @@ module decoder(
 );
 
     //Assign special case instructions by 7 LSB
-    assign isALUreg = (instr[6:0] == 7'b0110011);
-    assign isALUimm = (instr[6:0] == 7'b0010011);
-    assign isBranch = (instr[6:0] == 7'b1100011);
-    assign isJALR   = (instr[6:0] == 7'b1100111);
-    assign isJAL    = (instr[6:0] == 7'b1101111);
-    assign isAUIPC  = (instr[6:0] == 7'b0010111);
-    assign isLUI    = (instr[6:0] == 7'b0110111);
-    assign isLoad   = (instr[6:0] == 7'b0000011);
-    assign isStore  = (instr[6:0] == 7'b0100011);
+    assign isOP = (instr[6:0] == 7'b0110011);
+    assign isOP_IMM = (instr[6:0] == 7'b0010011);
+    assign isBRANCH = (instr[6:0] == 7'b1100011);
+    assign isJALR = (instr[6:0] == 7'b1100111);
+    assign isJAL = (instr[6:0] == 7'b1101111);
+    assign isAUIPC = (instr[6:0] == 7'b0010111);
+    assign isLUI = (instr[6:0] == 7'b0110111);
+    assign isLOAD = (instr[6:0] == 7'b0000011);
+    assign isSTORE = (instr[6:0] == 7'b0100011);
     assign isSYSTEM = (instr[6:0] == 7'b1110011);
-
-    assign isEBREAK = isSYSTEM && (funct3 == 3'b000) && (instr[31:20] == 12'h001);
-    assign isECALL  = isSYSTEM && (funct3 == 3'b000) && (instr[31:20] == 12'h000);
-    assign isCSRRS  = isSYSTEM && (funct3 == 3'b010);
 
     //Assign bits registers and returning address
     assign rs1Id = instr[19:15];
     assign rs2Id = instr[24:20];
-    assign rdId  = instr[11:7];
+    assign rdId = instr[11:7];
 
     //Assign for additional opcode commands
     assign funct3 = instr[14:12];
