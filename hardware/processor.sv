@@ -1,4 +1,4 @@
-module processor1 #(
+module processor #(
     parameter WIDTH = 32,
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
@@ -66,8 +66,8 @@ module processor1 #(
     logic [4:0] rdId;
 
     //Optional opcode fields for instruction
-    logic [6:0] funct7;
     logic [2:0] funct3;
+    logic [6:0] funct7;
 
     //Immediate values for different types of instructions
     logic [31:0] Uimm;
@@ -149,7 +149,7 @@ module processor1 #(
         .aluIn1(aluIn1),
         .aluIn2(aluIn2),
         .instr5(instr[5]),
-        .instr30(instr[30]),
+        .instr30(funct7[5]),
         .funct3(funct3),
         .pcJALR(pcJALR),
         .aluOut(aluOut),
@@ -215,6 +215,8 @@ module processor1 #(
                     loadAddr <= 0;
                     storeAddr <= 0;
 
+                    isCSRRS <= 0;
+
                     writeBackEnable <= 0;
 
                     aluIn1 <= 0;
@@ -222,7 +224,6 @@ module processor1 #(
 
                     cycles <= 0;
                     instrRetired <= 0;
-                    isCSRRS <= 0;
 
                     //Set up initial read
                     addrOut <= RESET_ADDRESS;
@@ -277,14 +278,7 @@ module processor1 #(
 
                                 isCSRRS <= (isSYSTEM) && (funct3 == 3'b010);
 
-                                if (instr == EBREAK)
-                                    begin
-                                        state <= HALT;
-                                    end
-                                else
-                                    begin
-                                        state <= EXECUTE;
-                                    end
+                                state <= EXECUTE;
                             end
                         EXECUTE: 
                             begin
@@ -341,7 +335,14 @@ module processor1 #(
                                                     isAUIPC ||
                                                     isCSRRS);
                                 
-                                state <= MEMORY;	          
+                                if (instr == EBREAK)
+                                    begin
+                                        state <= HALT;
+                                    end
+                                else
+                                    begin
+                                        state <= MEMORY;
+                                    end          
                             end
                         MEMORY:
                             begin
