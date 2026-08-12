@@ -1,7 +1,7 @@
 //CYCLES_PER_BIT = 25 MHZ / 115000 Baud
 
 module uart_rx #(
-    parameter CYCLES_PER_BIT = 217
+    parameter unsigned CYCLES_PER_BIT = 217
 ) (
     input logic clock,
     input logic rxDataStream,
@@ -9,7 +9,9 @@ module uart_rx #(
     output logic rxDataValid,
     output logic [7:0] rxByteData
 );
-    logic [7:0] count;
+    localparam COUNT_WIDTH = $clog2(CYCLES_PER_BIT);
+
+    logic [COUNT_WIDTH - 1:0] count;
     logic [7:0] data;
     logic [2:0] bitIndex;
     logic dataValid;
