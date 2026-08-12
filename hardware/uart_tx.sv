@@ -1,5 +1,5 @@
 module uart_tx #(
-    parameter CYCLES_PER_BIT = 217
+    parameter unsigned CYCLES_PER_BIT = 217
 ) (
     input logic clock,
     input logic txDataValid,
@@ -8,7 +8,9 @@ module uart_tx #(
     output logic txActive,
     output logic txDataStream
 );
-    logic [7:0] count;
+    localparam COUNT_WIDTH = $clog2(CYCLES_PER_BIT);
+
+    logic [COUNT_WIDTH - 1:0] count;
     logic [7:0] data;
     logic [2:0] bitIndex;
     logic parityBit;
