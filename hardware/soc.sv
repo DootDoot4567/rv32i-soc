@@ -1,7 +1,7 @@
+import soc_types_pkg::*;
+
 module soc #(
     parameter INIT = "",
-    parameter WIDTH = 32,
-    parameter DEPTH = 65536,
     parameter CYCLES_PER_BIT = 217
 ) (
     input logic clock,
@@ -10,35 +10,6 @@ module soc #(
     input logic rxDataStream,
     output logic txDataStream
 );
-    //Computes minimum bits needed for the mem addresses using log_2(depth)
-    localparam ADDR_WIDTH = $clog2(DEPTH);
-
-    //Address offsets based on memory map
-    localparam [ADDR_WIDTH - 1:0] ROM_BASE = 32'h00008000;
-    localparam [ADDR_WIDTH - 1:0] UART_BASE = 32'h00000340;
-
-    //Interconnect IO masks
-    localparam [ADDR_WIDTH - 1:0] ROM_MASK = 32'hFFFF8000;
-    localparam [ADDR_WIDTH - 1:0] UART_MASK = 32'hFFFFFFFC;
-
-    //CPU - Master 1
-    //BRAM - Slave 1 
-    //UART - Slave 2
-
-    typedef enum {
-        PROCESSOR,
-        NUM_MASTERS
-    } master_id_t;
-
-    typedef enum {
-        BRAM,
-        UART, 
-        NUM_SLAVES
-    } slave_id_t;
-    
-    //Declaration of the number of peripherals of our system
-    //By adding to the end of our enums
-
     //Signals shared by the Masters and Slaves:
 
     //comes from SYStem CONtroller
@@ -80,8 +51,8 @@ module soc #(
     logic [NUM_MASTERS - 1:0] masterStallIn;
 
     logic [NUM_SLAVES - 1:0][ADDR_WIDTH - 1:0] slaveAddrIn;
-    logic [NUM_SLAVES - 1:0][WIDTH - 1:0] slaveDataIn;
     logic [NUM_SLAVES - 1:0][WIDTH - 1:0] slaveDataOut;
+    logic [NUM_SLAVES - 1:0][WIDTH - 1:0] slaveDataIn;
     logic [NUM_SLAVES - 1:0][3:0] slaveSelectIn;
     logic [NUM_SLAVES - 1:0] slaveAcknowledgedOut;
     logic [NUM_SLAVES - 1:0] slaveWriteEnableIn;
@@ -90,25 +61,11 @@ module soc #(
     logic [NUM_SLAVES - 1:0] slaveStallOut;
 
     logic uartInterrupt;
-    logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0] slave_io_base;
-    logic [NUM_SLAVES-1:0][ADDR_WIDTH-1:0] slave_addr_mask;
 
-    assign slave_io_base = {
-        {UART_BASE},
-        {ROM_BASE}
-    };
-
-    assign slave_addr_mask = { 
-        {UART_MASK},
-        {ROM_MASK}
-    };
-
-    processor #(
-        .INIT(INIT),
+    processor6 #(
         .WIDTH(WIDTH),
-        .DEPTH(DEPTH),
         .ADDR_WIDTH(ADDR_WIDTH),
-        .RESET_ADDRESS(ROM_BASE)
+        .RESET_ADDRESS(RESET_ADDRESS)
     ) processor_inst (
         .clockIn(clock),
         .resetIn(reset),
@@ -124,8 +81,6 @@ module soc #(
     );
 
     wb_interconn #(
-        .NUM_SLAVES(NUM_SLAVES),
-        .NUM_MASTERS(NUM_MASTERS),
         .WIDTH(WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH)
     ) wb_interconn_inst (
@@ -148,9 +103,7 @@ module soc #(
         .slaveSelectIn(slaveSelectIn),
         .slaveWriteEnableIn(slaveWriteEnableIn),
         .slaveStrobeIn(slaveStrobeIn),
-        .slaveCycleIn(slaveCycleIn),
-        .slave_io_base(slave_io_base),
-        .slave_addr_mask(slave_addr_mask)
+        .slaveCycleIn(slaveCycleIn)
     );
 
     bram_sdp #(
@@ -158,7 +111,7 @@ module soc #(
         .DEPTH(DEPTH),
         .ADDR_WIDTH(ADDR_WIDTH),
         .INIT(INIT),
-        .ROM_BASE(ROM_BASE)
+        .ROM_BASE(RESET_ADDRESS)
     ) bram_inst (
         .clock(clock),
         .addrIn(slaveAddrIn[BRAM]),
