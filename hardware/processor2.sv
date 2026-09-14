@@ -15,16 +15,26 @@ module processor2 #(
     output logic strobeOut,
     output logic cycleOut
 );
-    //NOP = addi zero, zero, 0, using add could have the same behavior,
+    //Constants
+
+    //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
 
-    //Program counter and different wires to drive different pc
-    //values at different states
-    logic [31:0] f_pc, fd_pc, de_pc;
-    logic [31:0] fd_nextPc, de_nextPc, em_nextPc, mw_nextPc;
-    logic [31:0] f_pcPlus4;
+    //Program counters
+
+    //address being requested this cycle
+    logic [31:0] f_pc;
+
+    //pipelined registers holding the pc at DE and EXEC states
+    logic [31:0] fd_pc;
+    logic [31:0] de_pc;
+
+    //branch, jump or auipc targets computed in DE state
     logic [31:0] de_pcPlusImm;
+
+    //JALR target from alu
     logic [31:0] e_pcJALR;
 
     //Flag to decide to branch or not
@@ -39,20 +49,11 @@ module processor2 #(
     logic [31:0] aluIn1;
     logic [31:0] aluIn2;
 
-    //Instruction variable and its variants (bubbled)
-    logic [31:0] d_instr, de_instr, em_instr, mw_instr;
-
-    //Read (BRAM & UART operation) variables (bubbled)
-    logic f_readEnable, em_readEnable;
-    logic [ADDR_WIDTH - 1:0] f_addrRead, em_addrRead;
-
-    //NOT USED
-    logic [31:0] em_dataRead;
-
-    //Write (BRAM & UART operation) variables (bubbled)
-    logic em_writeEnable;
-    logic [ADDR_WIDTH - 1:0] em_addrWrite;
-    logic [31:0] em_dataWrite;
+    //Instruction register and its variants (bubbled)
+    logic [31:0] fd_instr;
+    logic [31:0] de_instr;
+    logic [31:0] em_instr;
+    logic [31:0] mw_instr;
 
     //Boolean flags used by the decoder, processor, and alu
     logic d_isALUreg, e_isALUreg; 
@@ -66,10 +67,18 @@ module processor2 #(
     logic d_isStore, e_isStore, em_isStore;
     logic d_isSYSTEM, e_isSYSTEM;
 
-    //Indexes for input registers and ra register
-    logic [4:0] d_rs1Id, e_rs1Id;
-    logic [4:0] d_rs2Id, e_rs2Id;
-    logic [4:0] d_rdId, e_rdId, em_rdId, mw_rdId;
+    //Indexes for input registers and rd register
+    logic [4:0] d_rs1Id;
+    logic [4:0] d_rs2Id;
+    logic [4:0] d_rdId;
+
+    logic [4:0] de_rs1Id;
+    logic [4:0] de_rs2Id;
+    logic [4:0] de_rdId;
+
+    logic [4:0] em_rdId;
+
+    logic [4:0] mw_rdId;
 
     //Optional opcode fields for instruction
     logic [2:0] d_funct3, e_funct3, em_funct3, mw_funct3;
