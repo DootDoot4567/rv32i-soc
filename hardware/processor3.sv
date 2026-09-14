@@ -494,11 +494,11 @@ module processor3 #(
                                     begin
                                         busOwner <= busOwner;
                                     end
-                                else if (em_writeEnable)
+                                else if (em_isSTORE)
                                     begin
                                         busOwner <= STORE;
                                     end
-                                else if (em_readEnable)
+                                else if (em_isLOAD)
                                     begin
                                         busOwner <= LOAD;
                                     end
