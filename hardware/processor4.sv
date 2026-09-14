@@ -333,21 +333,10 @@ module processor4 #(
 
     //Continously drive ALU inputs
     assign aluIn1 = e_rs1Forwarded;
-    assign aluIn2 = (e_isOP || e_isBRANCH) ? e_rs2Forwarded : e_Iimm;
+    assign aluIn2 = (de_isOP || de_isBRANCH) ? e_rs2Forwarded : de_Iimm;
     
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
-    assign e_effectiveInstr = de_instr;
-    assign m_effectiveInstr = em_instr;
-    assign w_effectiveInstr = mw_instr;
-                  
-    //Continously drive the target memory address (used by loads and stores)
-    assign w_loadAddr = mw_loadAddr;
-    assign e_storeAddr = de_storeAddr;
- 
-    //Continously drive the data read from BRAM 
-    // assign d_instr = instrPrefetched;
-    // assign d_pc = pcPrefetched;
 
     //fetch readEnable and address are computed combinatorially
     assign f_readEnable = !stallFetch && !stallIn;
@@ -356,18 +345,18 @@ module processor4 #(
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
     assign d_readsRs2 = decodeIsValid && (d_isOP || d_isBRANCH || d_isSTORE);
 
-    assign e_writesRd = (e_effectiveInstr != NOP) && !e_isSTORE && !e_isBRANCH;
-    assign m_writesRd = (m_effectiveInstr != NOP) && !em_isSTORE && !em_isBRANCH;
-    assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isSTORE && !mw_isBRANCH;
+    assign e_writesRd = (de_instr != NOP) && !de_isSTORE && !de_isBRANCH;
+    assign m_writesRd = (em_instr != NOP) && !em_isSTORE && !em_isBRANCH;
+    assign w_writesRd = (mw_instr != NOP) && !mw_isSTORE && !mw_isBRANCH;
 
-    assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && (d_rs1Id == e_rdId) && e_writesRd;
-    assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && (d_rs2Id == e_rdId) && e_writesRd;
+    assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && (d_rs1Id == de_rdId) && e_writesRd;
+    assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && (d_rs2Id == de_rdId) && e_writesRd;
 
-    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBRANCH);
+    assign controlHazard = de_isJAL || de_isJALR || (e_takeBranch && de_isBRANCH);
     assign structuralHazard = em_isLOAD || em_isSTORE;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLOAD;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || de_isLOAD;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
@@ -375,19 +364,14 @@ module processor4 #(
 
     assign writeBackEnable = w_writesRd && mw_rdId != 0;
 
-    // assign em_readEnable = em_isLOAD;
-    // assign em_writeEnable = em_isSTORE;
-
     assign prefetchReset = flushDecode || resetIn;
 
     assign prefetchWriteEnable = (busOwner == FETCH) && acknowledgedIn && !prefetchFull && !prefetchReset && !em_isLOAD && !preventFetch;
-    assign prefetchDataWrite   = {capturedReqPc, dataIn};
+    assign prefetchDataWrite = {capturedReqPc, dataIn};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     assign strobeOut = (state == RUN) ? 1'b1 : 1'b0;
     assign cycleOut = (state == RUN) ? 1'b1 : 1'b0;
-
-    assign e_isCSRRS = e_isSYSTEM && (e_funct3 == 3'b010);
 
     always_comb 
         begin
