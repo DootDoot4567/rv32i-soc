@@ -22,6 +22,11 @@ module processor6 #(
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
+    localparam ECALL = 32'h00000073;
+    localparam WFI = 32'h10500073;
+    localparam MRET = 32'h30200073;
+    localparam SRET = 32'h10200073; 
 
     //Depth for Branch Prediction Table (BHT)
     localparam BHT_DEPTH = 4096;
@@ -368,6 +373,31 @@ module processor6 #(
         .e_rs2Forwarded(e_rs2Forwarded)
     );
 
+    csr csr_inst (
+        .clock(clockIn),
+        .reset(resetIn),
+        .retired(retired),
+        .dataIn(csrDataIn),
+        .address(csrAddr),
+        .op(csrOp),
+        .readEnable(csrReadEnable),
+        .trapTaken(trapTaken),
+        .trapCause(trapCause),
+        .trapValue(trapValue),
+        .trapPC(trapPC),
+        .isMRET(de_instr == MRET),
+        .isSRET(de_instr == SRET),
+        .dataOut(csrDataOut),
+        .trapTargetPC(trapTargetPC),
+        .mretTargetPC(mretTargetPC),
+        .sretTargetPC(sretTargetPC),
+        .mode(current_mode),
+        .pmpAddr(pmpAddr),
+        .pmpCfg(pmpCfg),
+        .csrIllegalAccess(csrIllegalAccess)
+    );
+
+
     //Continously drive ALU inputs
     assign aluIn1 = e_rs1Forwarded;
     assign aluIn2 = (de_isOP || de_isBRANCH) ? e_rs2Forwarded : de_Iimm;
@@ -413,6 +443,17 @@ module processor6 #(
     assign d_predictTaken = bpGHT[bpIndex][1];
     assign bpIndex = computeGHTIndex(f_pc);
 
+    assign d_isCSR = d_isSYSTEM && (d_funct3 != 3'b000) && (d_funct3 != 3'b100);
+
+    assign trapTaken = (de_instr != NOP) && ((de_instr == EBREAK) || (de_instr == ECALL) || e_isIllegal || csrIllegalAccess || pmpFetchFault || pmpLoadFault || pmpStoreFault);
+
+    //Last case: illegal instruction (covers e_isIllegal + csrIllegalAccess)
+    assign trapCause =
+        (de_instr == ECALL)  ? (current_mode == MACHINE ? 32'd11 : (current_mode == SUPERVISOR ? 32'd9 : 32'd8)) :
+        (de_instr == EBREAK) ? 32'd3 : 32'd2;   
+
+    assign trapValue = e_isIllegal ? de_instr : 32'd0;
+
     function automatic [BHT_ADDR_WIDTH - 1:0] computeGHTIndex;
         input [31:0] pc;
         computeGHTIndex = pc[BHT_ADDR_WIDTH + 1:2] ^ bpGHR;
@@ -445,13 +486,25 @@ module processor6 #(
                 em_isSTORE: addrOut = em_storeAddr;
                 em_isLOAD: addrOut = em_loadAddr;
 
-                default: e_result = 32'd0;
+                default: addrOut = f_addrRead;
             endcase
         end
 
     always_comb 
         begin
-            if ((de_isBRANCH && e_takeBranch) || de_isJAL)
+            if (trapTaken)
+                begin
+                    f_nextPc = trapTargetPC;
+                end
+            else if (de_instr == MRET)
+                begin
+                    f_nextPc = mretTargetPC;  
+                end
+            else if (de_instr == SRET)
+                begin
+                    f_nextPc = sretTargetPC;
+                end
+            else if ((de_isBRANCH && e_takeBranch) || de_isJAL)
                 begin
                     f_nextPc = de_pcPlusImm;
                 end
@@ -463,18 +516,6 @@ module processor6 #(
                 begin
                     f_nextPc = f_pc;
                 end
-        end
-
-    always_comb
-        begin
-            case (e_Iimm[11:0])
-                12'hc00: e_csrData = cycles[31:0];
-                12'hc80: e_csrData = cycles[63:32];
-                12'hc02: e_csrData = instrRetired[31:0];
-                12'hc82: e_csrData = instrRetired[63:32];
-
-                default: e_csrData = 32'h0;
-            endcase
         end
 
     always_comb
@@ -584,8 +625,6 @@ module processor6 #(
                 end
             else 
                 begin
-                    cycles <= cycles + 1;
-
                     case(state)
                         HALT: 
                             begin
@@ -668,6 +707,11 @@ module processor6 #(
 
                                         de_rs1 <= 0;
                                         de_rs2 <= 0;
+
+                                        csrAddr <= 0;
+                                        csrDataIn <= 0;
+                                        csrOp <= 0;
+                                        csrReadEnable <= 0;
                                     end
                                 else if (!stallDecode)
                                     begin
@@ -704,6 +748,21 @@ module processor6 #(
                                         de_funct7 <= d_funct7;
                                         de_Uimm <= d_Uimm;
                                         de_Iimm <= d_Iimm;
+
+                                        if (d_isCSR)
+                                            begin
+                                                csrAddr <= d_effectiveInstr[31:20];
+                                                csrDataIn <= d_funct3[2] ? {27'd0, d_rs1Id} : d_rs1Forwarded;
+                                                csrOp <= d_funct3[1:0];
+                                                csrReadEnable <= !(d_funct3[1:0] == 2'b01 && d_rdId == 0);
+                                            end
+                                        else
+                                            begin
+                                                csrAddr <= 0;
+                                                csrDataIn <= 0;
+                                                csrOp <= 0;
+                                                csrReadEnable <= 0;
+                                            end
                                     end
 
                                 preventFetch <= controlHazard;
@@ -766,8 +825,8 @@ module processor6 #(
                                     end
                                 else
                                     begin
-                                em_loadAddr <= de_loadAddr;
-                                em_storeAddr <= de_storeAddr;
+                                        em_loadAddr <= de_loadAddr;
+                                        em_storeAddr <= de_storeAddr;
                                         em_rdId <= de_rdId;
                                         em_funct3 <= de_funct3;
 
@@ -784,8 +843,8 @@ module processor6 #(
                                         mw_writeBackData <= em_writeBackData;
 
                                         mw_loadAddr <= em_loadAddr;
-                                mw_rdId <= em_rdId;
-                                mw_funct3 <= em_funct3;
+                                        mw_rdId <= em_rdId;
+                                        mw_funct3 <= em_funct3;
 
                                         mw_isLOAD <= em_isLOAD;
                                         mw_isSTORE <= em_isSTORE;
@@ -794,7 +853,7 @@ module processor6 #(
                                         mw_instr <= em_instr;
                                     end
 
-                                if (mw_isLOAD && mw_rdId != 0)
+                                if (mw_isLOAD && mw_rdId != 0 && acknowledgedIn)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
