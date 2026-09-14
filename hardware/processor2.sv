@@ -339,8 +339,11 @@ module processor2 #(
                             end
                         FETCH:
                             begin
-                                //Schedule readEnable to go down at posedge of next clock cycle
-                                f_readEnable <= 0;
+                                //Register data response from BRAM
+                                if (acknowledgedIn)
+                                    begin
+                                        fd_instr <= dataIn;
+                                    end
 
                                 fd_pc <= f_pc;
                                 fd_nextPc <= f_pcPlus4;
