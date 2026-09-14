@@ -169,20 +169,17 @@ module processor2 #(
 
     //Instantiate the decoder (purely combinatorial) -- DECODE STATE
     decoder decoder_inst_d (
-        .instr(d_effectiveInstr),
-        .isALUreg(d_isALUreg),
-        .isALUimm(d_isALUimm),
-        .isBranch(d_isBranch),
+        .instr(fd_instr),
+        .isOP(d_isOP),
+        .isOP_IMM(d_isOP_IMM),
+        .isBRANCH(d_isBRANCH),
         .isJALR(d_isJALR),
         .isJAL(d_isJAL),
         .isAUIPC(d_isAUIPC),
         .isLUI(d_isLUI),
-        .isLoad(d_isLoad),
-        .isStore(d_isStore),
+        .isLOAD(d_isLOAD),
+        .isSTORE(d_isSTORE),
         .isSYSTEM(d_isSYSTEM),
-        .isEBREAK(d_isEBREAK),
-        .isECALL(d_isECALL),
-        .isCSRRS(d_isCSRRS),
         .rs1Id(d_rs1Id),
         .rs2Id(d_rs2Id),
         .rdId(d_rdId),
@@ -199,9 +196,9 @@ module processor2 #(
     alu alu_inst (
         .aluIn1(aluIn1),
         .aluIn2(aluIn2),
-        .instr5(e_effectiveInstr[5]),
-        .instr30(e_effectiveInstr[30]),
-        .funct3(e_funct3),
+        .instr5(de_instr[5]),
+        .instr30(de_funct7[5]),
+        .funct3(de_funct3),
         .pcJALR(e_pcJALR),
         .aluOut(e_aluOut),
         .isEQ(e_isEQ),
@@ -213,12 +210,12 @@ module processor2 #(
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .loadAddr(w_loadAddr),
-        .storeAddr(e_storeAddr),
-        .rs2(de_rs2),
-        .dataRead(dataRead),
+        .loadAddr(mw_loadAddr),
+        .storeAddr(de_storeAddr),
+        .rs2(registerFile[de_rs2Id]),
+        .dataRead(dataIn),
         .funct3Load(mw_funct3),
-        .funct3Store(e_funct3),
+        .funct3Store(de_funct3),
         .storeData(e_storeData),
         .loadData(w_loadData),
         .storeMask(e_storeMask)
