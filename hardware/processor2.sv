@@ -346,7 +346,6 @@ module processor2 #(
                                     end
 
                                 fd_pc <= f_pc;
-                                fd_nextPc <= f_pcPlus4;
 
                                 state <= DECODE;
                             end
@@ -354,107 +353,104 @@ module processor2 #(
                             begin
                                 //Calculate Branch, JAL and AUIPC targets here
                                 //PC value + immediate based on isTYPE flags
-                                de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm[31:0] :
-                                            d_isAUIPC ? d_Uimm[31:0] :
-                                            d_Bimm[31:0]);
-
-                                de_nextPc <= fd_nextPc;
-                                de_pc <= fd_pc;
-                                de_instr <= d_effectiveInstr;
+                                de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm :
+                                    (d_isAUIPC ? d_Uimm : d_Bimm));
 
                                 de_loadAddr <= registerFile[d_rs1Id] + d_Iimm;
                                 de_storeAddr <= registerFile[d_rs1Id] + d_Simm;
 
-                                de_rs1 <= registerFile[d_rs1Id];
-                                de_rs2 <= registerFile[d_rs2Id];
+                                aluIn1 <= registerFile[d_rs1Id];
+                                aluIn2 <= (d_isOP || d_isBRANCH) ? registerFile[d_rs2Id] : d_Iimm;
 
+                                de_pc <= fd_pc;
+                                de_instr <= fd_instr;
 
-                                if (d_isEBREAK) 
-                                    begin
-                                        state <= HALT;
-                                    end
-                                else
-                                    begin
+                                de_isOP <= d_isOP;
+                                de_isOP_IMM <= d_isOP_IMM;
+                                de_isBRANCH <= d_isBRANCH;
+                                de_isJALR <= d_isJALR;
+                                de_isJAL <= d_isJAL;
+                                de_isAUIPC <= d_isAUIPC;
+                                de_isLUI <= d_isLUI;
+                                de_isLOAD <= d_isLOAD;
+                                de_isSTORE <= d_isSTORE;
+                                de_isSYSTEM <= d_isSYSTEM;
+                                de_isCSRRS <= d_isSYSTEM && (d_funct3 == 3'b010);
+
+                                de_rs2Id <= d_rs2Id;
+                                de_rdId <= d_rdId;
+                                de_funct3 <= d_funct3;
+                                de_funct7 <= d_funct7;
+                                de_Uimm <= d_Uimm;
+                                de_Iimm <= d_Iimm;
+
                                         state <= EXECUTE;
                                     end 
-                            end
                         EXECUTE: 
                             begin
                                 //Compute values for the writeback and the next program counter
                                 
-                                if ((e_isBranch && e_takeBranch) ||  e_isJAL)
+                                if ((de_isBRANCH && e_takeBranch) || de_isJAL)
                                     begin
-                                        em_nextPc <= de_pcPlusImm;
+                                        f_pc <= de_pcPlusImm;
                                     end
-                                else if (e_isJALR)
+                                else if (de_isJALR)
                                     begin
-                                        em_nextPc <= e_pcJALR;
+                                        f_pc <= e_pcJALR;
                                     end
                                 else
                                     begin
-                                        em_nextPc <= de_nextPc;
-                                        // em_nextPc <= f_pcPlus4;
+                                        f_pc <= de_pc + 4;
                                     end
 
+                                case(1)
+                                    de_isJAL: em_writeBackData <= de_pc + 4;
+                                    de_isJALR: em_writeBackData <= de_pc + 4;
+                                    de_isLUI: em_writeBackData <= de_Uimm;
+                                    de_isAUIPC: em_writeBackData <= de_pcPlusImm;
+                                    de_isCSRRS: em_writeBackData <= csrData;
 
-                                if (e_isALUreg || e_isALUimm)
-                                    begin
-                                        em_writeBackData <= e_aluOut;
-                                    end
-                                else if (e_isJAL || e_isJALR) 
-                                    begin
-                                        em_writeBackData <= de_nextPc;
-                                    end
-                                else if (e_isLUI)
-                                    begin
-                                        em_writeBackData <= e_Uimm;
-                                    end
-                                else if (e_isAUIPC)
-                                    begin 
-                                        em_writeBackData <= de_pcPlusImm;
-                                    end
-                                else if (e_isCSRRS)
-                                    begin
-                                        em_writeBackData <= e_csrData;
-                                    end
-                                else
-                                    begin
-                                        em_writeBackData <= 32'd0;
-                                    end
+                                    default: em_writeBackData <= e_aluOut;
+                                endcase
                                 
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
-                                if (e_isLoad) 
+                                if (de_isLOAD) 
                                     begin
-                                        em_readEnable <= 1;
-                                        em_addrRead <= de_loadAddr;
+                                        addrOut <= de_loadAddr;
+                                        writeEnableOut <= 0;
+                                        strobeOut <= 1;
+                                        cycleOut <= 1;
                                     end
-                                else if (e_isStore) 
+                                else if (de_isSTORE) 
                                     begin
-                                        em_addrWrite <= de_storeAddr;
-                                        em_dataWrite <= e_storeData;
-                                        em_storeMask <= e_storeMask;
-                                        em_writeEnable <= 1;
+                                        addrOut <= de_storeAddr;
+                                        dataOut <= e_storeData;
+                                        selectOut <= e_storeMask;
+                                        writeEnableOut <= 1;
+                                        strobeOut <= 1;
+                                        cycleOut <= 1;
                                     end
 
-                                em_writeBackEnable <= (e_isALUreg ||
-                                                       e_isALUimm ||
-                                                       e_isJAL ||
-                                                       e_isJALR ||
-                                                       e_isLUI ||
-                                                       e_isAUIPC ||
-                                                       e_isCSRRS);
+                                //Schedule a writeback by driving writeBackEnable
+                                em_writeBackEnable <= (de_isOP ||
+                                                       de_isOP_IMM ||
+                                                       de_isJAL ||
+                                                       de_isJALR ||
+                                                       de_isLUI ||
+                                                       de_isAUIPC ||
+                                                       de_isCSRRS);
 
-                                em_rdId <= e_rdId;
-                                em_funct3 <= e_funct3;
+                                em_rdId <= de_rdId;
+                                em_funct3 <= de_funct3;
 
-                                em_isLoad <= e_isLoad;
-                                em_isStore <= e_isStore;
+                                em_isLOAD <= de_isLOAD;
+                                em_isSTORE <= de_isSTORE;
 
                                 em_loadAddr <= de_loadAddr;
-                                em_instr <= e_effectiveInstr;
+                                em_instr <= de_instr;
 
-                                if (e_isEBREAK) 
+                                if (de_instr == EBREAK) 
                                     begin
                                         state <= HALT;
                                     end
