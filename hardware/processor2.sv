@@ -461,7 +461,6 @@ module processor2 #(
                             end
                         MEMORY:
                             begin
-                                //Schedule a writeback by driving writeBackEnable for one cycle
                                 mw_writeBackEnable <= em_writeBackEnable;
                                 mw_writeBackData <= em_writeBackData;
 

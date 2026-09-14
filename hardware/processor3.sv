@@ -20,6 +20,7 @@ module processor3 #(
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
 
     //Program counters
 
@@ -27,7 +28,8 @@ module processor3 #(
     logic [31:0] f_pc;
 
     //pipelined registers holding the pc at DE and EXEC states
-    logic [31:0] fd_pc, de_pc;
+    logic [31:0] fd_pc;
+    logic [31:0] de_pc;
 
     //next pc after branch/jump resolution
     logic [31:0] f_nextPc;
