@@ -223,20 +223,20 @@ module processor2 #(
 
     always_comb
         begin
-            case (e_Iimm[11:0])
-                12'hc00: e_csrData = cycles[31:0];
-                12'hc80: e_csrData = cycles[63:32];
-                12'hc02: e_csrData = instrRetired[31:0];
-                12'hc82: e_csrData = instrRetired[63:32];
+            case (de_Iimm[11:0])
+                12'hc00: csrData = cycles[31:0];
+                12'hc80: csrData = cycles[63:32];
+                12'hc02: csrData = instrRetired[31:0];
+                12'hc82: csrData = instrRetired[63:32];
 
-                default: e_csrData = 32'h0;
+                default: csrData = 32'h0;
             endcase
         end
 
     always_comb
         begin
             //Branch decision logic 
-            case(e_funct3)
+            case(de_funct3)
                 3'b000: e_takeBranch = e_isEQ;
                 3'b001: e_takeBranch = !e_isEQ;
                 3'b100: e_takeBranch = e_isLT;
