@@ -532,21 +532,62 @@ module processor3 #(
                                         de_loadAddr <= 0;
                                         de_storeAddr <= 0;
 
-                                        de_rs1 <= 0;
-                                        de_rs2 <= 0;
+                                        aluIn1 <= 0;
+                                        aluIn2 <= 0;
+
+                                        de_isOP <= 0;
+                                        de_isOP_IMM <= 0;
+                                        de_isBRANCH <= 0;
+                                        de_isJALR <= 0;
+                                        de_isJAL <= 0;
+                                        de_isAUIPC <= 0;
+                                        de_isLUI <= 0;
+                                        de_isLOAD <= 0;
+                                        de_isSTORE <= 0;
+                                        de_isSYSTEM <= 0;
+                                        de_isCSRRS <= 0;
+
+                                        de_rs1Id <= 0;
+                                        de_rs2Id <= 0;
+                                        de_rdId <= 0;
+                                        de_funct3 <= 0;
+                                        de_funct7 <= 0;
+                                        de_Uimm <= 0;
+                                        de_Iimm <= 0;
                                     end
                                 else if (!stallDecode)
                                     begin
-                                        de_pc <= fd_pc;
-                                        de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm : (d_isAUIPC ? d_Uimm : d_Bimm));
-
-                                        de_instr <= d_effectiveInstr;
+                                        de_pcPlusImm <= fd_pc + (d_isJAL ? d_Jimm :
+                                            (d_isAUIPC ? d_Uimm : d_Bimm));
 
                                         de_loadAddr <= registerFile[d_rs1Id] + d_Iimm;
                                         de_storeAddr <= registerFile[d_rs1Id] + d_Simm;
 
-                                        de_rs1 <= registerFile[d_rs1Id];
-                                        de_rs2 <= registerFile[d_rs2Id];
+                                        aluIn1 <= registerFile[d_rs1Id];
+                                        aluIn2 <= (d_isOP || d_isBRANCH) ? registerFile[d_rs2Id] : d_Iimm;
+
+                                        de_pc <= fd_pc;
+                                        de_instr <= d_effectiveInstr;
+
+                                        de_isOP <= d_isOP;
+                                        de_isOP_IMM <= d_isOP_IMM;
+                                        de_isBRANCH <= d_isBRANCH;
+                                        de_isJALR <= d_isJALR;
+                                        de_isJAL <= d_isJAL;
+                                        de_isAUIPC <= d_isAUIPC;
+                                        de_isLUI <= d_isLUI;
+                                        de_isLOAD <= d_isLOAD;
+                                        de_isSTORE <= d_isSTORE;
+                                        de_isSYSTEM <= d_isSYSTEM;
+                                        de_isCSRRS <= d_isSYSTEM && (d_funct3 == 3'b010);
+
+                                        de_rs1Id <= d_rs1Id;
+                                        de_rs2Id <= d_rs2Id;
+                                        de_rdId <= d_rdId;
+                                        de_funct3 <= d_funct3;
+                                        de_funct7 <= d_funct7;
+                                        de_Uimm <= d_Uimm;
+                                        de_Iimm <= d_Iimm;
                                     end
 
                                 //Compute values for the writeback and the next program counter
@@ -561,74 +602,44 @@ module processor3 #(
                                         f_pc <= f_pc + 4;
                                     end
 
-                                if (e_isALUreg || e_isALUimm)
-                                    begin
-                                        em_writeBackData <= e_aluOut;
-                                    end
-                                else if (e_isJAL || e_isJALR) 
-                                    begin
-                                        em_writeBackData <= de_pc + 4;
-                                    end
-                                else if (e_isLUI)
-                                    begin
-                                        em_writeBackData <= e_Uimm;
-                                    end
-                                else if (e_isAUIPC)
-                                    begin 
-                                        em_writeBackData <= de_pcPlusImm;
-                                    end
-                                else if (e_isCSRRS)
-                                    begin
-                                        em_writeBackData <= e_csrData;
-                                    end
-                                else
-                                    begin
-                                        em_writeBackData <= 32'd0;
-                                    end
-                                
-                                //If instruction is load, schedule a read
-                                //otherwise schedule a memory write
+                               case(1)
+                                    de_isJAL: em_writeBackData <= de_pc + 4;
+                                    de_isJALR: em_writeBackData <= de_pc + 4;
+                                    de_isLUI: em_writeBackData <= de_Uimm;
+                                    de_isAUIPC: em_writeBackData <= de_pcPlusImm;
+                                    de_isCSRRS: em_writeBackData <= csrData;
 
-                                em_readEnable <= e_isLoad;
-                                em_writeEnable <= e_isStore;
+                                    default: em_writeBackData <= e_aluOut;
+                                endcase
 
                                 em_loadAddr <= de_loadAddr;
                                 em_storeAddr <= de_storeAddr;
-                                em_dataWrite <= e_storeData;
+                                em_rdId <= de_rdId;
+                                em_funct3 <= de_funct3;
+
+                                em_isLOAD <= de_isLOAD;
+                                em_isSTORE <= de_isSTORE;
+                                em_isBRANCH <= de_isBRANCH;
+
+                                em_instr <= de_instr;
+                    
+                                dataOut <= e_storeData;
                                 selectOut <= e_storeMask;
-
-                                em_rdId <= e_rdId;
-                                em_funct3 <= e_funct3;
-
-                                em_isLoad <= e_isLoad;
-                                em_isStore <= e_isStore;
-                                em_isBranch <= e_isBranch;
-
-                                em_instr <= e_effectiveInstr;
-                                writeEnableOut <= e_isStore;
-
-                                //Stop reading or writing at the WB state
-                                if (em_isLoad)
-                                    begin
-                                        mw_loadAddr <= em_loadAddr;
-                                    end
-                                else if (em_isStore)
-                                    begin
-                                        mw_storeAddr <= em_storeAddr;
-                                    end
-
-                                mw_rdId <= em_rdId;
-                                mw_funct3 <= em_funct3;
-
-                                mw_isLoad <= em_isLoad;
-                                mw_isStore <= em_isStore;
-                                mw_isBranch <= em_isBranch;
+                                writeEnableOut <= de_isSTORE;
 
                                 mw_writeBackData <= em_writeBackData;
 
-                                mw_instr <= m_effectiveInstr;
+                                        mw_loadAddr <= em_loadAddr;
+                                mw_rdId <= em_rdId;
+                                mw_funct3 <= em_funct3;
 
-                                if (mw_isLoad && mw_rdId != 0)
+                                mw_isLOAD <= em_isLOAD;
+                                mw_isSTORE <= em_isSTORE;
+                                mw_isBRANCH <= em_isBRANCH;
+
+                                mw_instr <= em_instr;
+
+                                if (mw_isLOAD && mw_rdId != 0 && acknowledgedIn)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
@@ -640,14 +651,14 @@ module processor3 #(
                                         registerFile[mw_rdId] <= mw_writeBackData;
                                     end
 
-                                if (w_effectiveInstr != NOP) 
+                                if ((mw_instr != NOP) && acknowledgedIn) 
                                     begin
                                         instrRetired <= instrRetired + 1;
 
                                         // $display("%h", w_effectiveInstr);
                                     end
 
-                                if (e_isEBREAK || d_isEBREAK) 
+                                if (de_instr == EBREAK) 
                                     begin
                                         state <= HALT;
                                     end
@@ -656,6 +667,8 @@ module processor3 #(
                                         state <= RUN;
                                     end 
                             end
+
+                        default: state <= HALT;
                     endcase
                 end
         end
