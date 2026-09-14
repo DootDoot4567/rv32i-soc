@@ -484,7 +484,7 @@ module processor2 #(
                             end
                         WRITE_BACK:
                             begin
-                                if (mw_isLoad && mw_rdId != 0)
+                                if (mw_isLOAD && mw_rdId != 0 && acknowledgedIn)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;
@@ -496,20 +496,25 @@ module processor2 #(
                                         registerFile[mw_rdId] <= mw_writeBackData;
                                     end
 
-                                //Read next instruction
-                                f_pc <= mw_nextPc;
-                                f_addrRead <= mw_nextPc;
-                                f_readEnable <= 1;
+                                if (mw_instr != NOP) 
+                                    begin
+                                        instrRetired <= instrRetired + 1;
 
-                                //Stop writeback at next clock cycle
+                                        // $display("%h", w_effectiveInstr);
+                                    end
+
+                                //at next clock cycle:
+                                //Stop writeback
                                 mw_writeBackEnable <= 0;
 
-                                instrRetired <= instrRetired + 1;
-
-                                // $display("%h", w_effectiveInstr);
+                                //Prevent read
+                                strobeOut <= 0;
+                                cycleOut <= 0;
 
                                 state <= FETCH;
                             end
+
+                            default: state <= HALT;
                     endcase
                 end
         end
