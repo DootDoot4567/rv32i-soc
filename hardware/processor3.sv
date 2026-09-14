@@ -296,45 +296,35 @@ module processor3 #(
         .full(prefetchFull)
     );
 
-    //Continously drive ALU inputs
-    assign aluIn1 = de_rs1;
-    assign aluIn2 = (e_isALUreg || e_isBranch) ? de_rs2 : e_Iimm;
-
     //Continously drive bubbled instructions
     assign d_effectiveInstr = (decodeIsValid) ? fd_instr : NOP;
-    assign e_effectiveInstr = de_instr;
-    assign m_effectiveInstr = em_instr;
-    assign w_effectiveInstr = mw_instr;
     
     //fetch readEnable and address are computed combinatorially
-    assign f_readEnable = !stallFetch && !stallIn;;
+    assign f_readEnable = !stallFetch && !stallIn;
     assign f_addrRead = controlHazard ? f_nextPc : f_pc;
     
-    //Continously drive external BRAM signals using EXEC -> MEM signals
-    assign dataOut = em_dataWrite;
-
     assign d_readsRs1 = decodeIsValid && !(d_isJAL || d_isAUIPC || d_isLUI);
-    assign d_readsRs2 = decodeIsValid && (d_isALUreg || d_isBranch || d_isStore);
+    assign d_readsRs2 = decodeIsValid && (d_isOP || d_isBRANCH || d_isSTORE);
 
-    assign e_writesRd = (e_effectiveInstr != NOP) && !e_isStore && !e_isBranch;
-    assign m_writesRd = (m_effectiveInstr != NOP) && !em_isStore && !em_isBranch;
-    assign w_writesRd = (w_effectiveInstr != NOP) && !mw_isStore && !mw_isBranch;
+    assign e_writesRd = (de_instr != NOP) && !de_isSTORE && !de_isBRANCH;
+    assign m_writesRd = (em_instr != NOP) && !em_isSTORE && !em_isBRANCH;
+    assign w_writesRd = (mw_instr != NOP) && !mw_isSTORE && !mw_isBRANCH;
 
     assign rs1Conflict = d_readsRs1 && d_rs1Id != 0 && 
-                        (((d_rs1Id == e_rdId) && e_writesRd) || 
+                        (((d_rs1Id == de_rdId) && e_writesRd) || 
                          ((d_rs1Id == em_rdId) && m_writesRd) ||
                          ((d_rs1Id == mw_rdId) && w_writesRd));
 
     assign rs2Conflict = d_readsRs2 && d_rs2Id != 0 && 
-                        (((d_rs2Id == e_rdId) && e_writesRd) || 
+                        (((d_rs2Id == de_rdId) && e_writesRd) || 
                          ((d_rs2Id == em_rdId )&& m_writesRd) ||
                          ((d_rs2Id == mw_rdId) && w_writesRd));
 
-    assign controlHazard = e_isJAL || e_isJALR || (e_takeBranch && e_isBranch);
-    assign structuralHazard = em_isLoad || em_isStore;
+    assign controlHazard = de_isJAL || de_isJALR || (e_takeBranch && de_isBRANCH);
+    assign structuralHazard = em_isLOAD || em_isSTORE;
     assign dataHazard = rs1Conflict || rs2Conflict;
     
-    assign stallFetch = dataHazard || structuralHazard || prefetchFull || e_isLoad;
+    assign stallFetch = dataHazard || structuralHazard || prefetchFull || de_isLOAD;
     assign stallDecode = dataHazard;
     
     assign flushDecode = controlHazard;
@@ -344,13 +334,12 @@ module processor3 #(
 
     assign prefetchReset = flushDecode || resetIn;
 
-    assign prefetchWriteEnable = (busOwner == FETCH) && acknowledgedIn && !prefetchFull && !prefetchReset && !em_isLoad && !preventFetch;
+    assign prefetchWriteEnable = (busOwner == FETCH) && acknowledgedIn && !prefetchFull && !prefetchReset && !em_isLOAD && !preventFetch;
+    assign prefetchDataWrite = {capturedReqPc, dataIn};
     assign prefetchReadEnable = !prefetchEmpty && !stallDecode && !flushDecode;
 
     assign strobeOut = (state == RUN) ? 1'b1 : 1'b0;
     assign cycleOut = (state == RUN) ? 1'b1 : 1'b0;
-
-    assign prefetchDataWrite = {capturedReqPc, dataIn};
 
     always_comb 
         begin
