@@ -1,7 +1,7 @@
-module processor #(
-    parameter INIT = "",
+import cpu_types_pkg::*;
+
+module processor6 #(
     parameter WIDTH = 32,
-    parameter DEPTH = 16384,
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
 ) (

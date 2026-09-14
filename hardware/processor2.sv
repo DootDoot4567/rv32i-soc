@@ -1,13 +1,11 @@
-module processor #(
-    parameter INIT = "",
+module processor2 #(
     parameter WIDTH = 32,
-    parameter DEPTH = 16384,
     parameter ADDR_WIDTH = 32,
     parameter RESET_ADDRESS = 32'h00008000
 ) (
     input logic clockIn,
     input logic resetIn,
-    input logic stallIn,
+    input logic stallIn, //not used because processor not pipelined
     input logic acknowledgedIn,
     input logic [WIDTH - 1:0] dataIn,
     output logic [WIDTH - 1:0] dataOut,
@@ -534,53 +532,5 @@ module processor #(
                     endcase
                 end
         end
-
-    // always_ff @(posedge clock) begin
-    //     if (!reset) begin
-    //         if (mw_isLoad && mw_rdId != 0 && mw_loadAddr >= 32'h81e0 && mw_loadAddr <= 32'h81f0) begin
-    //             $display("LSU_WB cyc=%0d | mw_loadAddr=%h mw_funct3=%b dataRead=%h w_loadData=%h mw_rdId=x%0d de_pc=%h",
-    //                 cycles,
-    //                 mw_loadAddr,
-    //                 mw_funct3,
-    //                 dataRead,
-    //                 w_loadData,
-    //                 mw_rdId,
-    //                 de_pc
-    //             );
-    //         end
-    //     end
-    // end
-
-    // always_ff @(posedge clock) begin
-    //     if (!reset && state == WRITE_BACK && mw_isLoad && de_pc >= 32'h816c) begin
-    //         $display("MEM cyc=%0d type=LOAD addr=%h data=%h pc=%h",
-    //             cycles,
-    //             mw_loadAddr,
-    //             w_loadData,
-    //             de_pc
-    //         );
-    //     end
-    // end
-
-    // `ifdef SIMULATION
-    //     always @(posedge clock) 
-    //         begin
-    //             $display("PC=%0d instr=%h", f_pc, d_instr);
-    //             $display("Instruction opcode %b", dataRead[6:0]);
-                
-    //             case (1'b1)
-    //                 d_isALUreg: $display("ALUreg rd=%0d rs1=%0d rs2=%0d funct3=%b", d_rdId, d_rs1Id, d_rs2Id, d_funct3);
-    //                 d_isALUimm: $display("ALUimm rd=%0d rs1=%0d imm=%0d funct3=%b", d_rdId, d_rs1Id, d_Iimm, d_funct3);
-    //                 d_isLoad:   $display("LOAD");
-    //                 d_isStore:  $display("STORE");
-    //                 d_isBranch: $display("BRANCH");
-    //                 d_isJAL:    $display("JAL");
-    //                 d_isJALR:   $display("JALR");
-    //                 d_isLUI:    $display("LUI");
-    //                 d_isAUIPC:  $display("AUIPC");
-    //                 d_isSYSTEM: $display("SYSTEM (EBREAK)");
-    //             endcase
-    //         end
-    // `endif
 
 endmodule
