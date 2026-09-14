@@ -475,8 +475,6 @@ module processor3 #(
                 begin
                     cycles <= cycles + 1;
 
-                    // $display("%h", dataIn);
-
                     case(state)
                         HALT: 
                             begin
@@ -651,7 +649,7 @@ module processor3 #(
                                         registerFile[mw_rdId] <= mw_writeBackData;
                                     end
 
-                                if ((mw_instr != NOP) && acknowledgedIn) 
+                                if ((mw_instr != NOP)) 
                                     begin
                                         instrRetired <= instrRetired + 1;
 
