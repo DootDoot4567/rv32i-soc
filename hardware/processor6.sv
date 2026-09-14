@@ -441,14 +441,9 @@ module processor6 #(
 
     always_comb 
         begin
-            case (1)
-                e_isALUreg: e_result = e_aluOut;
-                e_isALUimm: e_result = e_aluOut;
-                e_isJAL: e_result = de_pc + 4;
-                e_isJALR: e_result = de_pc + 4;
-                e_isLUI: e_result = e_Uimm;
-                e_isAUIPC: e_result = de_pcPlusImm;
-                e_isCSRRS: e_result = e_csrData;
+            case(1)
+                em_isSTORE: addrOut = em_storeAddr;
+                em_isLOAD: addrOut = em_loadAddr;
 
                 default: e_result = 32'd0;
             endcase
@@ -456,11 +451,11 @@ module processor6 #(
 
     always_comb 
         begin
-            if ((e_isBranch && e_takeBranch) || e_isJAL)
+            if ((de_isBRANCH && e_takeBranch) || de_isJAL)
                 begin
                     f_nextPc = de_pcPlusImm;
                 end
-            else if (e_isJALR)
+            else if (de_isJALR)
                 begin
                     f_nextPc = e_pcJALR;
                 end
@@ -485,7 +480,7 @@ module processor6 #(
     always_comb
         begin
             //Branch decision logic 
-            case(e_funct3)
+            case(de_funct3)
                 3'b000: e_takeBranch = e_isEQ;
                 3'b001: e_takeBranch = !e_isEQ;
                 3'b100: e_takeBranch = e_isLT;
