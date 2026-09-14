@@ -463,27 +463,22 @@ module processor2 #(
                             begin
                                 //Schedule a writeback by driving writeBackEnable for one cycle
                                 mw_writeBackEnable <= em_writeBackEnable;
-
-                                //Stop reading or writing at the WB state
-                                if (em_isLoad)
-                                    begin
-                                        em_readEnable <= 0;
-                                    end
-                                else if (em_isStore)
-                                    begin
-                                        em_writeEnable <= 0;
-                                    end
+                                mw_writeBackData <= em_writeBackData;
 
                                 mw_rdId <= em_rdId;
                                 mw_funct3 <= em_funct3;
 
-                                mw_isLoad <= em_isLoad;
-                                mw_nextPc <= em_nextPc;
+                                mw_isLOAD <= em_isLOAD;
                                 mw_loadAddr <= em_loadAddr;
 
-                                mw_writeBackData <= em_writeBackData;
+                                mw_instr <= em_instr;
 
-                                mw_instr <= m_effectiveInstr;
+                                //Read next instruction (PC updated in EXEC)
+                                addrOut <= f_pc;
+                                writeEnableOut <= 0;
+
+                                strobeOut <= 1;
+                                cycleOut <= 1;
 
                                 state <= WRITE_BACK;
                             end
