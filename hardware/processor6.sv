@@ -593,11 +593,6 @@ module processor6 #(
                             end
                         INITIAL:
                             begin
-                                f_pc <= RESET_ADDRESS;
-                                fd_pc <= RESET_ADDRESS;
-                                capturedReqPc <= RESET_ADDRESS;
-                                mem_resp_state <= NOTHING;
-
                                 state <= RUN;
                             end
                         RUN:
