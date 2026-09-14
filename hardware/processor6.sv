@@ -272,11 +272,6 @@ module processor6 #(
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
-
-    initial 
-        begin
-            $readmemh("register_init.mem", registerFile);
-        end
     
     int i;
 
