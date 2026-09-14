@@ -20,6 +20,7 @@ module processor5 #(
     //NOP = addi zero, zero, 0, using add could have the same behavior?,
     //which would make the NOP = 32'h00000033
     localparam NOP = 32'h00000013;
+    localparam EBREAK = 32'h00100073;
 
     //Depth for Branch Prediction Table (BHT)
     localparam BHT_DEPTH = 4096;
@@ -33,7 +34,8 @@ module processor5 #(
     logic [31:0] f_pc;
 
     //pipelined registers holding the pc at DE and EXEC states
-    logic [31:0] fd_pc, de_pc;
+    logic [31:0] fd_pc;
+    logic [31:0] de_pc;
 
     //next pc after branch/jump resolution
     logic [31:0] f_nextPc;
@@ -60,84 +62,118 @@ module processor5 #(
     logic [31:0] aluIn2;
 
     //Instruction register and its variants (bubbled)
-    logic [31:0] fd_instr, de_instr, em_instr, mw_instr;
+    logic [31:0] fd_instr;
+    logic [31:0] de_instr;
+    logic [31:0] em_instr;
+    logic [31:0] mw_instr;
 
     //Read (BRAM & UART operation) registers (bubbled)
-    logic f_readEnable, em_readEnable;
-    logic [ADDR_WIDTH - 1:0] f_addrRead, em_addrRead;
-
-    //NOT USED
-    logic [31:0] em_dataRead;
-
-    //Write (BRAM & UART operation) registers (bubbled)
-    logic em_writeEnable;
-    //logic [ADDR_WIDTH - 1:0] em_addrWrite;
-    logic [31:0] em_dataWrite;
+    logic f_readEnable;
+    logic [ADDR_WIDTH - 1:0] f_addrRead;
 
     //Boolean flags used by the decoder, processor, and alu
-    logic d_isALUreg, e_isALUreg; 
-    logic d_isALUimm, e_isALUimm;
-    logic d_isBranch, e_isBranch, em_isBranch, mw_isBranch;
-    logic d_isJALR, e_isJALR;    
-    logic d_isJAL, e_isJAL;    
-    logic d_isAUIPC, e_isAUIPC;    
-    logic d_isLUI, e_isLUI;    
-    logic d_isLoad, e_isLoad, em_isLoad, mw_isLoad;  
-    logic d_isStore, e_isStore, em_isStore, mw_isStore;
-    logic d_isSYSTEM, e_isSYSTEM;
+    logic d_isOP;
+    logic d_isOP_IMM;
+    logic d_isBRANCH;
+    logic d_isJALR;
+    logic d_isJAL;
+    logic d_isAUIPC;
+    logic d_isLUI;  
+    logic d_isLOAD;
+    logic d_isSTORE;
+    logic d_isSYSTEM;
 
-    //Indexes for input registers and ra register
-    logic [4:0] d_rs1Id, e_rs1Id;
-    logic [4:0] d_rs2Id, e_rs2Id;
-    logic [4:0] d_rdId, e_rdId, em_rdId, mw_rdId;
+    logic de_isOP;
+    logic de_isOP_IMM;
+    logic de_isBRANCH;
+    logic de_isJALR;
+    logic de_isJAL;
+    logic de_isAUIPC;
+    logic de_isLUI;
+    logic de_isLOAD;
+    logic de_isSTORE;
+    logic de_isSYSTEM;
+
+    logic em_isLOAD;
+    logic mw_isLOAD;
+
+    logic em_isSTORE;
+    logic mw_isSTORE;
+
+    logic em_isBRANCH;
+    logic mw_isBRANCH;
+
+    //Indexes for input registers and rd register
+    logic [4:0] d_rs1Id;
+    logic [4:0] d_rs2Id;
+    logic [4:0] d_rdId;
+
+    logic [4:0] de_rs1Id;
+    logic [4:0] de_rs2Id;
+    logic [4:0] de_rdId;
+
+    logic [4:0] em_rdId;
+
+    logic [4:0] mw_rdId;
 
     //Optional opcode fields for instruction
-    logic [2:0] d_funct3, e_funct3, em_funct3, mw_funct3;
-    logic [6:0] d_funct7, e_funct7;
+    logic [2:0] d_funct3;
+    logic [6:0] d_funct7;
+
+    logic [2:0] de_funct3;
+    logic [6:0] de_funct7;
+
+    logic [2:0] em_funct3;
+
+    logic [2:0] mw_funct3;
 
     //Immediate values for different types of instructions
-    logic [31:0] d_Uimm, e_Uimm;
-    logic [31:0] d_Iimm, e_Iimm;
-    logic [31:0] d_Simm, e_Simm;
-    logic [31:0] d_Bimm, e_Bimm;
-    logic [31:0] d_Jimm, e_Jimm;
+    logic [31:0] d_Uimm;
+    logic [31:0] d_Iimm;
+    logic [31:0] d_Simm;
+    logic [31:0] d_Bimm;
+    logic [31:0] d_Jimm;
 
-    //Environment defined variables
-    logic d_isEBREAK, e_isEBREAK;
-    logic d_isECALL, e_isECALL;
-    logic d_isCSRRS, e_isCSRRS;
+    logic [31:0] de_Uimm;
+    logic [31:0] de_Iimm;
 
     //Register fields from instruction decoding
-    logic [31:0] de_rs1, de_rs2;
+    logic [31:0] de_rs1;
+    logic [31:0] de_rs2;
 
     //Effective instructions (bubbled from state to state)
-    logic [31:0] d_effectiveInstr, 
-                 e_effectiveInstr, 
-                 m_effectiveInstr, 
-                 w_effectiveInstr;
+    logic [31:0] d_effectiveInstr;
 
     //Alu output 
     logic [31:0] e_aluOut;
 
     //Writeback data and its states
-    logic [31:0] em_writeBackData, mw_writeBackData;
+    logic [31:0] em_writeBackData;
+    logic [31:0] mw_writeBackData;
+
     logic writeBackEnable;
 
     //Computed memory address for loads and stores
-    logic [31:0] w_loadAddr, de_loadAddr, em_loadAddr, mw_loadAddr;
-    logic [31:0] e_storeAddr, de_storeAddr, em_storeAddr, mw_storeAddr;
+    logic [31:0] de_loadAddr;
+    logic [31:0] de_storeAddr;
+
+    logic [31:0] em_loadAddr;
+    logic [31:0] em_storeAddr;
+    
+    logic [31:0] mw_loadAddr;
 
     //Word written to word addressed bram and the mask 
     logic [31:0] e_storeData;
-    logic [3:0] e_storeMask, em_storeMask;
+    logic [3:0] e_storeMask;
 
     //Word loaded to register using combinatorial logic
     logic [31:0] w_loadData;
 
     //CSR Registers
-    logic [31:0] e_csrData;
+    logic [31:0] csrData;
     logic [63:0] cycles;
     logic [63:0] instrRetired;
+    logic de_isCSRRS;
 
     //Flush and stall signals
     logic flushDecode;
@@ -152,7 +188,9 @@ module processor5 #(
     logic d_readsRs1;
     logic d_readsRs2;
 
-    logic e_writesRd, m_writesRd, w_writesRd;
+    logic e_writesRd;
+    logic m_writesRd;
+    logic w_writesRd;
 
     logic controlHazard;
     logic structuralHazard;
@@ -167,7 +205,7 @@ module processor5 #(
     logic [63:0] prefetchDataWrite;
     logic [63:0] prefetchDataRead;
 
-    //Signal that validates the contents of decode
+    //signal that validates the contents of decode
     logic decodeIsValid;
 
     //signal that prevents a fetch a cycle after a control hazard
@@ -179,11 +217,6 @@ module processor5 #(
 
     logic [31:0] d_rs1Forwarded;
     logic [31:0] d_rs2Forwarded;
-
-    //Registers used to compute writeback faster and used by forwarder module 
-    logic [31:0] e_result;
-    logic [31:0] e_rs1;
-    logic [31:0] e_rs2;
 
     //Branch prediction registers and signals
     logic d_predictTaken, fd_predictTaken, de_predictTaken;
@@ -203,8 +236,6 @@ module processor5 #(
     } state_t;
 
     //Memory response tracking "state"
-    //tells us what dataRead contains THIS cycle,
-    //based on what was requested LAST cycle
     typedef enum {
         NOTHING,
         FETCH, 
@@ -214,7 +245,8 @@ module processor5 #(
     //Declare the state to start at INITIAL when there is a reset signal
     state_t state; 
 
-    mem_resp_t mem_resp_state;
+    //Part of the CPU expecting a response from memory
+    mem_resp_t busOwner;
 
     //Declare and initialize the registerFile using a file of 32 lines of 32'b0
     logic [31:0] registerFile [0:31];
