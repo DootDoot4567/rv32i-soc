@@ -221,39 +221,6 @@ module processor2 #(
         .storeMask(e_storeMask)
     );
 
-    //Continously drive ALU inputs
-    assign aluIn1 = de_rs1;
-    assign aluIn2 = (e_isALUreg || e_isBranch) ? de_rs2 : e_Iimm;
-    
-    //Continously drive bubbled instructions
-    assign d_effectiveInstr = d_instr;
-    assign e_effectiveInstr = de_instr;
-    assign m_effectiveInstr = em_instr;
-    assign w_effectiveInstr = mw_instr;
-                  
-    //Continously drive the target memory address (used by loads and stores)
-    assign w_loadAddr = mw_loadAddr;
-    assign e_storeAddr = de_storeAddr;
-
-    //Continously drive the instruction fetched
-    assign d_instr = dataRead;
-
-    //Continously drive the value of the pc for next instruction
-    assign f_pcPlus4 = f_pc + 4;
-
-    assign readEnable = (f_readEnable || em_readEnable) && !em_writeEnable;
-    assign addrRead = em_readEnable ? em_addrRead : (f_readEnable ? f_addrRead : 0);
-
-    //Continously drive external BRAM signals using EXEC -> MEM signals
-    assign writeEnable = em_writeEnable;
-    assign addrWrite = em_addrWrite;
-    assign dataWrite = em_dataWrite;
-
-    //Continously drive the mask for a store to BRAM
-    assign bramWriteMask = em_storeMask; 
-
-    logic [31:0] e_csrData;
-
     always_comb
         begin
             case (e_Iimm[11:0])
