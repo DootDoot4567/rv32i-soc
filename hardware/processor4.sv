@@ -251,9 +251,6 @@ module processor4 #(
         .isLOAD(d_isLOAD),
         .isSTORE(d_isSTORE),
         .isSYSTEM(d_isSYSTEM),
-        // .isEBREAK(d_isEBREAK),
-        // .isECALL(d_isECALL),
-        // .isCSRRS(d_isCSRRS),
         .rs1Id(d_rs1Id),
         .rs2Id(d_rs2Id),
         .rdId(d_rdId),
@@ -266,41 +263,13 @@ module processor4 #(
         .Jimm(d_Jimm)
     );
 
-    //Instantiate the decoder (purely combinatorial) -- EXEC STATE
-    decoder decoder_inst_e (
-        .instr(e_effectiveInstr),
-        .isOP(e_isOP),
-        .isOP_IMM(e_isOP_IMM),
-        .isBRANCH(e_isBRANCH),
-        .isJALR(e_isJALR),
-        .isJAL(e_isJAL),
-        .isAUIPC(e_isAUIPC),
-        .isLUI(e_isLUI),
-        .isLOAD(e_isLOAD),
-        .isSTORE(e_isSTORE),
-        .isSYSTEM(e_isSYSTEM),
-        // .isEBREAK(e_isEBREAK),
-        // .isECALL(e_isECALL),
-        // .isCSRRS(e_isCSRRS),
-        .rs1Id(e_rs1Id),
-        .rs2Id(e_rs2Id),
-        .rdId(e_rdId),
-        .funct3(e_funct3),
-        .funct7(e_funct7),
-        .Uimm(e_Uimm),
-        .Iimm(e_Iimm),
-        .Simm(e_Simm),
-        .Bimm(e_Bimm),
-        .Jimm(e_Jimm)
-    );
-
     //Instantiate the alu (purely combinatorial)
     alu alu_inst (
         .aluIn1(aluIn1),
         .aluIn2(aluIn2),
-        .instr5(e_effectiveInstr[5]),
-        .instr30(e_effectiveInstr[30]),
-        .funct3(e_funct3),
+        .instr5(de_instr[5]),
+        .instr30(de_funct7[5]),
+        .funct3(de_funct3),
         .pcJALR(e_pcJALR),
         .aluOut(e_aluOut),
         .isEQ(e_isEQ),
@@ -312,12 +281,12 @@ module processor4 #(
     lsu #(
         .WIDTH(WIDTH)
     ) lsu_inst (
-        .loadAddr(w_loadAddr),
-        .storeAddr(e_storeAddr),
+        .loadAddr(mw_loadAddr),
+        .storeAddr(de_storeAddr),
         .rs2(e_rs2Forwarded),
         .dataRead(dataIn),
         .funct3Load(mw_funct3),
-        .funct3Store(e_funct3),
+        .funct3Store(de_funct3),
         .storeData(e_storeData),
         .loadData(w_loadData),
         .storeMask(e_storeMask)
@@ -342,12 +311,12 @@ module processor4 #(
     reg_forwarder forwarder_inst (
         .d_rs1Id(d_rs1Id),
         .d_rs2Id(d_rs2Id),
-        .e_rs1Id(e_rs1Id),
-        .e_rs2Id(e_rs2Id),
-        .de_rs1(de_rs1),
-        .de_rs2(de_rs2),
-        .rs1Data(registerFile[d_rs1Id]),
-        .rs2Data(registerFile[d_rs2Id]),
+        .de_rs1Id(de_rs1Id),
+        .de_rs2Id(de_rs2Id),
+        .d_rs1Data(registerFile[d_rs1Id]),
+        .d_rs2Data(registerFile[d_rs2Id]),
+        .e_rs1Data(registerFile[de_rs1Id]),
+        .e_rs2Data(registerFile[de_rs2Id]),
         .em_rdId(em_rdId),
         .mw_rdId(mw_rdId),
         .m_writesRd(m_writesRd),
