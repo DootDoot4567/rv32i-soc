@@ -331,9 +331,9 @@ module processor2 #(
                             end
                         INITIAL:
                             begin
-                                f_pc <= RESET_ADDRESS;
-                                f_addrRead <= RESET_ADDRESS;
-                                f_readEnable <= 1; 
+                                //Prevent read at posedge of next clock cycle
+                                strobeOut <= 0;
+                                cycleOut <= 0;
 
                                 state <= FETCH;
                             end
