@@ -493,9 +493,9 @@ module processor6 #(
         end
 
     //Reset control + FSM
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
@@ -507,40 +507,78 @@ module processor6 #(
                             bpGHT[i] <= 2'b00;
                         end
 
-                    f_pc <= RESET_ADDRESS; fd_pc <= 0; de_pc <= 0;
+                    f_pc <= RESET_ADDRESS; 
 
+                    fd_pc <= 0;
+                    fd_instr <= NOP;
+
+                    de_pc <= 0;
+                    de_instr <= NOP;
                     de_pcPlusImm <= 0;
+                    de_loadAddr <= 0;
+                    de_storeAddr <= 0;
+                    de_isOP <= 0;
+                    de_isOP_IMM <= 0;
+                    de_isBRANCH <= 0;
+                    de_isJALR <= 0;
+                    de_isJAL <= 0;
+                    de_isAUIPC <= 0;
+                    de_isLUI <= 0;
+                    de_isLOAD <= 0;
+                    de_isSTORE <= 0;
+                    de_isSYSTEM <= 0;
+                    de_isCSR <= 0;
+                    de_rs1Id <= 0;
+                    de_rs2Id <= 0;
+                    de_rdId <= 0;
+                    de_funct3 <= 0;
+                    de_funct7 <= 0;
+                    de_Uimm <= 0;
+                    de_Iimm <= 0;
 
-                    fd_instr <= NOP; de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
+                    de_rs1 <= 0;
+                    de_rs2 <= 0;
 
-                    de_rs1 <= 0; de_rs2 <= 0;                    
+                    em_instr <= NOP;
+                    em_loadAddr <= 0;
+                    em_storeAddr <= 0;
+                    em_isLOAD <= 0;
+                    em_isSTORE <= 0;
+                    em_isBRANCH <= 0;
+                    em_rdId <= 0;
+                    em_funct3 <= 0;
+                    em_writeBackData <= 0;
 
-                    de_loadAddr <= 0; em_loadAddr <= 0; mw_loadAddr <= 0;
-                    de_storeAddr <= 0; em_storeAddr <= 0; mw_storeAddr <= 0;
-                    em_dataWrite <= 0;
+                    mw_instr <= NOP; 
+                    mw_loadAddr <= 0;
+                    mw_isLOAD <= 0;
+                    mw_isSTORE <= 0;
+                    mw_isBRANCH <= 0;
+                    mw_rdId <= 0;
+                    mw_funct3 <= 0;
+                    mw_writeBackData <= 0;
 
-                    em_rdId <= 0; mw_rdId <= 0;
-                    em_funct3 <= 0; mw_funct3 <= 0;
+                    retired <= 0;
 
-                    em_isLoad <= 0; mw_isLoad <= 0;
-                    em_isStore <= 0; mw_isStore <= 0;
-                    em_isBranch <= 0; mw_isBranch <= 0;
-
-                    em_storeMask <= 0;
-                    em_writeBackData <= 0; mw_writeBackData <= 0;
-
-                    cycles <= 0;
-                    instrRetired <= 0;
+                    //Set up initial read
+                    dataOut <= 0;
+                    selectOut <= 0;
+                    writeEnableOut <= 0;
         
                     decodeIsValid <= 0;
                     capturedReqPc <= RESET_ADDRESS;
-                    mem_resp_state <= NOTHING;
+                    busOwner <= FETCH;
 
                     preventFetch <= 0;
 
                     bpGHR <= 0;
                     fd_bpIndex <= 0; de_bpIndex <= 0;
                     fd_predictTaken <= 0; de_predictTaken <= 0;
+
+                    csrDataIn <= 0;
+                    csrAddr <= 0;
+                    csrOp <= 0;
+                    csrReadEnable <= 0;
 
                     state <= INITIAL;
                 end
