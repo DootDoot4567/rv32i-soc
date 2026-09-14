@@ -419,26 +419,21 @@ module processor5 #(
 
     always_comb 
         begin
-            case (1)
-                e_isALUreg: e_result = e_aluOut;
-                e_isALUimm: e_result = e_aluOut;
-                e_isJAL: e_result = de_pc + 4;
-                e_isJALR: e_result = de_pc + 4;
-                e_isLUI: e_result = e_Uimm;
-                e_isAUIPC: e_result = de_pcPlusImm;
-                e_isCSRRS: e_result = e_csrData;
+            case(1)
+                em_isSTORE: addrOut = em_storeAddr;
+                em_isLOAD: addrOut = em_loadAddr;
 
-                default: e_result = 32'd0;
+                default: addrOut = f_addrRead;
             endcase
         end
 
     always_comb 
         begin
-            if ((e_isBranch && e_takeBranch) || e_isJAL)
+            if ((de_isBRANCH && e_takeBranch) || de_isJAL)
                 begin
                     f_nextPc = de_pcPlusImm;
                 end
-            else if (e_isJALR)
+            else if (de_isJALR)
                 begin
                     f_nextPc = e_pcJALR;
                 end
@@ -450,20 +445,20 @@ module processor5 #(
 
     always_comb
         begin
-            case (e_Iimm[11:0])
-                12'hc00: e_csrData = cycles[31:0];
-                12'hc80: e_csrData = cycles[63:32];
-                12'hc02: e_csrData = instrRetired[31:0];
-                12'hc82: e_csrData = instrRetired[63:32];
+            case (de_Iimm[11:0])
+                12'hc00: csrData = cycles[31:0];
+                12'hc80: csrData = cycles[63:32];
+                12'hc02: csrData = instrRetired[31:0];
+                12'hc82: csrData = instrRetired[63:32];
 
-                default: e_csrData = 32'h0;
+                default: csrData = 32'h0;
             endcase
         end
 
     always_comb
         begin
             //Branch decision logic 
-            case(e_funct3)
+            case(de_funct3)
                 3'b000: e_takeBranch = e_isEQ;
                 3'b001: e_takeBranch = !e_isEQ;
                 3'b100: e_takeBranch = e_isLT;
@@ -476,9 +471,9 @@ module processor5 #(
         end
 
     //Reset control + FSM
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
