@@ -248,49 +248,75 @@ module processor2 #(
             endcase
         end
 
-    //Reset control
-    always_ff @(posedge clock)
+    //Reset control + FSM
+    always_ff @(posedge clockIn)
         begin
-            if (reset)
+            if (resetIn)
                 begin
                     for (i = 0; i < 32; i = i + 1)
                         begin
                             registerFile[i] <= 32'd0;
                         end
 
-                    f_pc <= 0; fd_pc <= 0; de_pc <= 0;
-                    fd_nextPc <= 0; de_nextPc <= 0; em_nextPc <= 0; mw_nextPc <= 0; 
+                    f_pc <= RESET_ADDRESS;
 
+                    fd_pc <= 0;
+                    fd_instr <= NOP;
+
+                    de_pc <= 0;
+                    de_instr <= NOP;
                     de_pcPlusImm <= 0;
-
-                    de_instr <= NOP; em_instr <= NOP; mw_instr <= NOP; 
-
-                    de_rs1 <= 0;
-                    de_rs2 <= 0;
-
-                    de_loadAddr <= 0; em_loadAddr <= 0; mw_loadAddr <= 0;
+                    de_loadAddr <= 0; 
                     de_storeAddr <= 0;
+                    de_isOP <= 0;
+                    de_isOP_IMM <= 0;
+                    de_isBRANCH <= 0;
+                    de_isJALR <= 0;
+                    de_isJAL <= 0;
+                    de_isAUIPC <= 0;
+                    de_isLUI <= 0;
+                    de_isLOAD <= 0;
+                    de_isSTORE <= 0;
+                    de_isSYSTEM <= 0;
+                    de_isCSRRS <= 0;
+                    de_rs1Id <= 0;
+                    de_rs2Id <= 0;
+                    de_rdId <= 0;
+                    de_funct3 <= 0;
+                    de_funct7 <= 0;
+                    de_Uimm <= 0;
+                    de_Iimm <= 0;
 
-                    f_addrRead <= 0; em_addrRead <= 0;
-                    f_readEnable <= 1; em_readEnable <= 0;  
+                    em_instr <= NOP;
+                    em_loadAddr <= 0;
+                    em_isLOAD <= 0;
+                    em_isSTORE <= 0; 
+                    em_rdId <= 0;
+                    em_funct3 <= 0;
+                    em_writeBackEnable <= 0;
+                    em_writeBackData <= 0; 
 
-                    em_rdId <= 0; mw_rdId <= 0;
-                    em_funct3 <= 0; mw_funct3 <= 0;
+                    mw_instr <= NOP; 
+                    mw_loadAddr <= 0;
+                    mw_isLOAD <= 0;
+                    mw_rdId <= 0;
+                    mw_funct3 <= 0;
+                    mw_writeBackEnable <= 0;
+                    mw_writeBackData <= 0;
 
-                    em_isLoad <= 0; mw_isLoad <= 0;
-                    em_isStore <= 0; 
-
-                    em_writeEnable <= 0;
-                    //em_dataRead <= 0;
-                    em_addrWrite <= 0;
-                    em_dataWrite <= 0;
-                    em_storeMask <= 0;
-
-                    em_writeBackData <= 0; mw_writeBackData <= 0;
-                    em_writeBackEnable <= 0; mw_writeBackEnable <= 0;
+                    aluIn1 <= 0;
+                    aluIn2 <= 0;
 
                     cycles <= 0;
                     instrRetired <= 0;
+
+                    //Set up initial read
+                    addrOut <= RESET_ADDRESS;
+                    dataOut <= 0;
+                    selectOut <= 0;
+                    writeEnableOut <= 0;
+                    strobeOut <= 1;
+                    cycleOut <= 1;
 
                     state <= INITIAL;
                 end
