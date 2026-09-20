@@ -712,34 +712,65 @@ module processor5 #(
                                 //If instruction is load, schedule a read
                                 //otherwise schedule a memory write
 
-                                em_loadAddr <= de_loadAddr;
-                                em_storeAddr <= de_storeAddr;
-                                em_rdId <= de_rdId;
-                                em_funct3 <= de_funct3;
+                                if ((em_isLOAD || em_isSTORE) && !acknowledgedIn)
+                                    begin
+                                        em_loadAddr <= em_loadAddr;
+                                        em_storeAddr <= em_storeAddr;
+                                        em_rdId <= em_rdId;
+                                        em_funct3 <= em_funct3;
 
-                                em_isLOAD <= de_isLOAD;
-                                em_isSTORE <= de_isSTORE;
-                                em_isBRANCH <= de_isBRANCH;
+                                        em_isLOAD <= em_isLOAD;
+                                        em_isSTORE <= em_isSTORE;
+                                        em_isBRANCH <= em_isBRANCH;
+                                        em_instr <= em_instr;
 
-                                em_instr <= de_instr;
+                                        dataOut <= dataOut;
+                                        selectOut <= selectOut;
+                                        writeEnableOut <= writeEnableOut;
 
-                                dataOut <= e_storeData;
-                                selectOut <= e_storeMask;
-                                writeEnableOut <= de_isSTORE;
+                                        mw_writeBackData <= mw_writeBackData;
 
-                                mw_writeBackData <= em_writeBackData;
+                                        mw_loadAddr <= mw_loadAddr;
+                                        mw_rdId <= mw_rdId;
+                                        mw_funct3 <= mw_funct3;
 
-                                        mw_loadAddr <= em_loadAddr;
-                                mw_rdId <= em_rdId;
-                                mw_funct3 <= em_funct3;
+                                        mw_isLOAD <= mw_isLOAD;
+                                        mw_isSTORE <= mw_isSTORE;
+                                        mw_isBRANCH <= mw_isBRANCH;
 
-                                mw_isLOAD <= em_isLOAD;
-                                mw_isSTORE <= em_isSTORE;
-                                mw_isBRANCH <= em_isBRANCH;
+                                        mw_instr <= mw_instr;
+                                    end
+                                else
+                                    begin
+                                        em_loadAddr <= de_loadAddr;
+                                        em_storeAddr <= de_storeAddr;
+                                        em_rdId <= de_rdId;
+                                        em_funct3 <= de_funct3;
 
-                                mw_instr <= em_instr;
+                                        em_isLOAD <= de_isLOAD;
+                                        em_isSTORE <= de_isSTORE;
+                                        em_isBRANCH <= de_isBRANCH;
 
-                                if (mw_isLOAD && mw_rdId != 0)
+                                        em_instr <= de_instr;
+
+                                        dataOut <= e_storeData;
+                                        selectOut <= e_storeMask;
+                                        writeEnableOut <= de_isSTORE;
+
+                                        mw_writeBackData <= em_writeBackData;
+
+                                                mw_loadAddr <= em_loadAddr;
+                                        mw_rdId <= em_rdId;
+                                        mw_funct3 <= em_funct3;
+
+                                        mw_isLOAD <= em_isLOAD;
+                                        mw_isSTORE <= em_isSTORE;
+                                        mw_isBRANCH <= em_isBRANCH;
+
+                                        mw_instr <= em_instr;
+                                    end
+
+                                if (mw_isLOAD && mw_rdId != 0 && acknowledgedIn)
                                     begin
                                         //Write to register with loaded word 
                                         registerFile[mw_rdId] <= w_loadData;

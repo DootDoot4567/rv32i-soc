@@ -238,7 +238,7 @@ module processor6 #(
     logic [BHT_ADDR_WIDTH - 1:0] bpGHR;
     logic [BHT_ADDR_WIDTH - 1:0] fd_bpIndex, de_bpIndex;
 
-    //M/U mode control logic
+    //M/S/U mode control logic
     logic trapTaken;
     logic [31:0] trapCause;
     logic [31:0] trapValue;
@@ -445,7 +445,7 @@ module processor6 #(
 
     assign d_isCSR = d_isSYSTEM && (d_funct3 != 3'b000) && (d_funct3 != 3'b100);
 
-    assign trapTaken = (de_instr != NOP) && ((de_instr == EBREAK) || (de_instr == ECALL) || e_isIllegal || csrIllegalAccess || pmpFetchFault || pmpLoadFault || pmpStoreFault);
+    assign trapTaken = (de_instr != NOP) && ((de_instr == EBREAK) || (de_instr == ECALL) || e_isIllegal || csrIllegalAccess);
 
     //Last case: illegal instruction (covers e_isIllegal + csrIllegalAccess)
     assign trapCause =
