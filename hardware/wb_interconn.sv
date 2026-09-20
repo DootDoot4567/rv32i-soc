@@ -41,13 +41,13 @@ module wb_interconn #(
     function automatic s_point connectSlavePoint(
         input logic [ADDR_WIDTH-1:0] addr
     );
-        s_point result = 0;
+        s_point result = '0;
 
         //size of bases and mask should be the same
         //compiles to priority encoder?
         for (int i = 1; i < NUM_SLAVES; i++)
             begin
-                if (!result.found && ((addr[0] & ADDR_MASK[i - 1]) == IO_BASE[i - 1]))
+                if (!result.found && ((addr & ADDR_MASK[i - 1]) == IO_BASE[i - 1]))
                     begin
                         result.slaveSelected = i;
                         result.found = 1;
@@ -59,7 +59,7 @@ module wb_interconn #(
 
     always_comb 
         begin
-            slaveConnection = connectSlavePoint(masterAddrOut[0]);
+            slaveConnection = connectSlavePoint(masterAddrOut[PROCESSOR]);
         end
 
     always_ff @(posedge clock)
