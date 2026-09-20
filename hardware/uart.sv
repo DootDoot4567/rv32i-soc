@@ -3,8 +3,8 @@ module uart #(
     parameter ADDR_WIDTH = 16,
     parameter WIDTH = 32
 ) (
-    input logic clock,
-    input logic reset,
+    input logic clockIn,
+    input logic resetIn,
     input logic rxDataStream,
 
     input logic [ADDR_WIDTH - 1:0] addrIn,
@@ -15,7 +15,6 @@ module uart #(
     input logic writeEnableIn,
 
     output logic stallOut,
-    output logic interrupt,
     output logic acknowledgedOut,
     output logic [WIDTH - 1:0] dataOut,
 
@@ -53,10 +52,12 @@ module uart #(
     logic [7:0] dataWrite;
     logic [7:0] dataRead;
 
+    logic interrupt;
+
     uart_rx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_rx_inst (
-        .clock,
+        .clock(clockIn),
         .rxDataStream,
         .rxDataValid(rxDataValid),
         .rxByteData(rxDataWrite)
@@ -66,8 +67,8 @@ module uart #(
         .DEPTH(16),
         .WIDTH(8)
     ) rx_fifo_inst (
-        .clock,
-        .reset,
+        .clock(clockIn),
+        .reset(resetIn),
         .writeEnable(rxWriteEnable),
         .readEnable(rxReadEnable),
         .dataRead(rxDataRead),
@@ -79,7 +80,7 @@ module uart #(
     uart_tx #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_tx_inst (
-        .clock,
+        .clock(clockIn),
         .txDataValid(txDataValid),
         .txByteData(txByteData),
         .txActive,
@@ -90,8 +91,8 @@ module uart #(
         .DEPTH(16),
         .WIDTH(8)
     ) tx_fifo_inst (
-        .clock,
-        .reset,
+        .clock(clockIn),
+        .reset(resetIn),
         .writeEnable(txWriteEnable),
         .readEnable(txReadEnable),
         .dataRead(txDataRead),
@@ -140,9 +141,9 @@ module uart #(
             endcase
         end
 
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
-            if (reset) 
+            if (resetIn) 
                 begin
                     dataRead <= 8'h00;
                     acknowledgedOut <= 1'b0;

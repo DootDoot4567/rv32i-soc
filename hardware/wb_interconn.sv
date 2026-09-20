@@ -4,8 +4,8 @@ module wb_interconn #(
     parameter WIDTH  = 32,
     parameter ADDR_WIDTH  = 16
 ) (
-    input  logic clock,
-    input  logic reset,
+    input  logic clockIn,
+    input  logic resetIn,
 
     //Master ports
     input logic [NUM_MASTERS - 1:0][ADDR_WIDTH - 1:0] masterAddrOut,
@@ -62,7 +62,7 @@ module wb_interconn #(
             slaveConnection = connectSlavePoint(masterAddrOut[PROCESSOR]);
         end
 
-    always_ff @(posedge clock)
+    always_ff @(posedge clockIn)
         begin
             //here to fix cycle delay on synchronous reads
             prevSlaveSelected <= slaveConnection.slaveSelected;

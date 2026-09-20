@@ -84,8 +84,8 @@ module soc #(
         .WIDTH(WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH)
     ) wb_interconn_inst (
-        .clock(clock),
-        .reset(reset),
+        .clockIn(clock),
+        .resetIn(reset),
         .masterAddrOut(masterAddrOut),
         .masterDataOut(masterDataOut),
         .masterSelectOut(masterSelectOut),
@@ -113,7 +113,8 @@ module soc #(
         .INIT(INIT),
         .ROM_BASE(RESET_ADDRESS)
     ) bram_inst (
-        .clock(clock),
+        .clockIn(clock),
+        .resetIn(reset),
         .addrIn(slaveAddrIn[BRAM]),
         .dataIn(slaveDataIn[BRAM]),
         .selectIn(slaveSelectIn[BRAM]),
@@ -128,8 +129,8 @@ module soc #(
     uart #(
         .CYCLES_PER_BIT(CYCLES_PER_BIT)
     ) uart_inst (
-        .clock(clock),
-        .reset(reset),
+        .clockIn(clock),
+        .resetIn(reset),
         .rxDataStream(rxDataStream),
         .addrIn(slaveAddrIn[UART]),
         .dataIn(slaveDataIn[UART]),
@@ -137,7 +138,6 @@ module soc #(
         .strobeIn(slaveStrobeIn[UART]),
         .cycleIn(slaveCycleIn[UART]),
         .writeEnableIn(slaveWriteEnableIn[UART]),
-        .interrupt(uartInterrupt), //replace with something, force interrupt instead of polling for uart eventually add dma?
         .stallOut(slaveStallOut[UART]),
         .acknowledgedOut(slaveAcknowledgedOut[UART]),
         .dataOut(slaveDataOut[UART]),

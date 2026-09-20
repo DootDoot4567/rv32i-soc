@@ -8,7 +8,8 @@ module bram_sdp #(
     parameter INIT = "firmware.mem",
     parameter ROM_BASE = 32'h00008000
 ) (
-    input logic clock,
+    input logic clockIn,
+    input logic resetIn,
     input logic [ADDR_WIDTH - 1:0] addrIn,
     input logic [WIDTH - 1:0] dataIn,
     input logic [3:0] selectIn,
@@ -37,7 +38,7 @@ module bram_sdp #(
     //BRAM never tells cpu to stall
     assign stallOut = 1'b0;
 
-    always_ff @(posedge clock) 
+    always_ff @(posedge clockIn) 
         begin
             acknowledgedOut <= strobeIn && cycleIn;
 
