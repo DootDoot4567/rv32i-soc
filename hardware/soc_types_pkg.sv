@@ -21,8 +21,8 @@ package soc_types_pkg;
     parameter int NUM_SLAVES = 3;
     parameter int NUM_MASTERS = 1;
 
-    parameter [ADDR_WIDTH - 1:0] UART_BASE = 16'h0344;
-    parameter [ADDR_WIDTH - 1:0] CLINT_BASE = 16'h0340;
+    parameter [ADDR_WIDTH - 1:0] UART_BASE = 16'h0340;
+    parameter [ADDR_WIDTH - 1:0] CLINT_BASE = 16'h0344;
     parameter [ADDR_WIDTH - 1:0] BRAM_BASE = 16'h0400;
 
     parameter [ADDR_WIDTH - 1:0] ADDR_MASK = 16'hFFFC;
