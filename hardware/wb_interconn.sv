@@ -29,31 +29,22 @@ module wb_interconn #(
     output logic [NUM_SLAVES - 1:0] slaveStrobeIn,
     output logic [NUM_SLAVES - 1:0] slaveCycleIn
 );
-    typedef struct packed {
-        //only works if NUM_SLAVES is greater than 1
-        logic [$clog2(NUM_SLAVES) - 1:0] slaveSelected;
-        logic found;
-    } s_point;
+    slave_id_t prevSlaveSelected;
+    slave_id_t slaveConnection;
 
-    logic [$clog2(NUM_SLAVES) - 1:0] prevSlaveSelected;
-    s_point slaveConnection;
-
-    function automatic s_point connectSlavePoint(
-        input logic [ADDR_WIDTH-1:0] addr
+    function automatic slave_id_t connectSlavePoint (
+        logic [ADDR_WIDTH-1:0] addr
     );
-        s_point result = '0;
+        slave_id_t result;
 
-        //size of bases and mask should be the same
-        //compiles to priority encoder?
-        for (int i = 1; i < NUM_SLAVES; i++)
-            begin
-                if (!result.found && ((addr & ADDR_MASK[i - 1]) == IO_BASE[i - 1]))
-                    begin
-                        result.slaveSelected = i;
-                        result.found = 1;
-                    end
-            end
-        
+        addressRegionBase = addr & ADDR_MASK;
+
+        case(addressRegionBase)
+            UART_BASE: result = UART;
+            CLINT_BASE: result = CLINT;
+            default: result = (addr >= BRAM_BASE) ? BRAM : INVALID;
+        endcase
+
         connectSlavePoint = result;
     endfunction
 
@@ -65,7 +56,7 @@ module wb_interconn #(
     always_ff @(posedge clockIn)
         begin
             //here to fix cycle delay on synchronous reads
-            prevSlaveSelected <= slaveConnection.slaveSelected;
+            prevSlaveSelected <= slaveConnection;
         end
 
     //P2P - One master connected to one slave
@@ -86,12 +77,12 @@ module wb_interconn #(
             masterAcknowledgedIn[PROCESSOR] = slaveAcknowledgedOut[prevSlaveSelected];
             masterDataIn[PROCESSOR] = slaveDataOut[prevSlaveSelected];
             masterStallIn[PROCESSOR] = slaveStallOut[prevSlaveSelected];
-            slaveDataIn[slaveConnection.slaveSelected] = masterDataOut[PROCESSOR];
-            slaveAddrIn[slaveConnection.slaveSelected] = masterAddrOut[PROCESSOR];
-            slaveSelectIn[slaveConnection.slaveSelected] = masterSelectOut[PROCESSOR];
-            slaveWriteEnableIn[slaveConnection.slaveSelected] = masterWriteEnableOut[PROCESSOR];
-            slaveStrobeIn[slaveConnection.slaveSelected] = masterStrobeOut[PROCESSOR];
-            slaveCycleIn[slaveConnection.slaveSelected] = masterCycleOut[PROCESSOR];
+            slaveDataIn[slaveConnection] = masterDataOut[PROCESSOR];
+            slaveAddrIn[slaveConnection] = masterAddrOut[PROCESSOR];
+            slaveSelectIn[slaveConnection] = masterSelectOut[PROCESSOR];
+            slaveWriteEnableIn[slaveConnection] = masterWriteEnableOut[PROCESSOR];
+            slaveStrobeIn[slaveConnection] = masterStrobeOut[PROCESSOR];
+            slaveCycleIn[slaveConnection] = masterCycleOut[PROCESSOR];
         end
 
     //Crossbar Switching - Multiple P2P parallel channels operating simultaneously
