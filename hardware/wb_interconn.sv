@@ -36,13 +36,14 @@ module wb_interconn #(
         logic [ADDR_WIDTH-1:0] addr
     );
         slave_id_t result;
+        logic [ADDR_WIDTH-1:0] addressRegionBase;
 
         addressRegionBase = addr & ADDR_MASK;
 
         case(addressRegionBase)
             UART_BASE: result = UART;
             CLINT_BASE: result = CLINT;
-            default: result = (addr >= BRAM_BASE) ? BRAM : INVALID;
+            default: result = slave_id_t'((addr >= BRAM_BASE) ? BRAM : INVALID);
         endcase
 
         connectSlavePoint = result;
