@@ -392,22 +392,24 @@ module processor5 #(
     assign d_predictTaken = bpGHT[bpIndex][1];
     assign bpIndex = computeGHTIndex(f_pc);
 
-    function automatic [BHT_ADDR_WIDTH - 1:0] computeGHTIndex;
-        input [31:0] pc;
+    function automatic [BHT_ADDR_WIDTH - 1:0] computeGHTIndex(
+        logic [31:0] pc
+    );
         computeGHTIndex = pc[BHT_ADDR_WIDTH + 1:2] ^ bpGHR;
     endfunction
 
-    function automatic [BHT_ADDR_WIDTH - 1:0] updateGHR;
-        input [BHT_ADDR_WIDTH - 1:0] gblHistReg;
-        input taken;
-        updateGHR = ({gblHistReg[BHT_ADDR_WIDTH-2:0], taken});
+    function automatic [BHT_ADDR_WIDTH - 1:0] updateGHR(
+        logic [BHT_ADDR_WIDTH - 1:0] gblHistReg,
+        logic taken
+    );
+        updateGHR = {gblHistReg[BHT_ADDR_WIDTH-2:0], taken};
     endfunction
 
     //Saturated counter update
-    function automatic [1:0] updateCounter;
-        input [1:0] counter;
-        input logic taken;
-
+    function automatic [1:0] updateCounter(
+        logic [1:0] counter,
+        logic taken
+    );
         if (taken)
             begin
                 updateCounter = (counter == 2'b11) ? 2'b11 : counter + 1;
