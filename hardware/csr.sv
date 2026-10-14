@@ -3,26 +3,32 @@ import cpu_types_pkg::*;
 module csr #(
     parameter CLOCK_FREQ = 25000000
 ) (
-    input  logic clock,
-    input  logic reset,
-    input  logic retired,
+    input logic clock,
+    input logic reset,
+    input logic retired,
 
-    input  logic [31:0] dataIn,
-    input  logic [11:0] address,
-    input  logic [1:0] op,
-    input  logic readEnable,
+    input logic [31:0] dataIn,
+    input logic [11:0] address,
+    input logic [1:0] op,
+    input logic readEnable,
 
-    input  logic trapTaken,
-    input  logic [31:0] trapCause,
-    input  logic [31:0] trapValue,
-    input  logic [31:0] trapPC,
-    input  logic isMRET,
-    input  logic isSRET,
+    input logic trapTaken,
+    input logic [31:0] trapCause,
+    input logic [31:0] trapValue,
+    input logic [31:0] trapPC,
+    input logic isMRET,
+    input logic isSRET,
+    input logic [63:0] mtime,
 
     output logic [31:0] dataOut,
     output logic [31:0] trapTargetPC,
     output logic [31:0] mretTargetPC,
     output logic [31:0] sretTargetPC,
+    output logic [31:0] mstatusOut,
+    output logic [31:0] mieOut,
+    output logic [31:0] mipOut,
+    output logic [31:0] midelegOut,
+    output logic [31:0] satpOut,
     output mode_t mode,
 
     output logic [PMP_ADDR_REG - 1:0][31:0] pmpAddr,
@@ -37,10 +43,10 @@ module csr #(
 
     localparam BM_MSTATUS = 32'h807E79EA;
     localparam BM_MISA = 32'h00000000; //not writable in M mode
-    localparam BM_MEDELEG = 32'h000003FF;
+    localparam BM_MEDELEG = 32'h0000B3FF;
     localparam BM_MIDELEG = 32'h00000222;
     localparam BM_MIE = 32'h00000AAA;
-    localparam BM_MTVEC = 32'hFFFFFFFF; //almost full write, just account for mode in 2 LSBs
+    localparam BM_MTVEC = 32'hFFFFFFFD; //almost full write, just account for mode in 2 LSBs
     localparam BM_MCOUNTEREN = 32'h00000007;
     localparam BM_MSTATUSH = 32'h000006F0;
     localparam BM_MEDELEGH = 32'h00000000; //not writable in M mode for now
@@ -52,8 +58,8 @@ module csr #(
     //Bitmasks for MTH registers:
 
     localparam BM_MSCRATCH = 32'hFFFFFFFF; //full write to register, read by OS
-    localparam BM_MEPC = 32'hFFFFFFFF;
-    localparam BM_MCAUSE = 32'h0000BFFF;
+    localparam BM_MEPC = 32'hFFFFFFFE;
+    localparam BM_MCAUSE = 32'h8000BFFF;
     localparam BM_MTVAL = 32'hFFFFFFFF;
     localparam BM_MIP = 32'h00000AAA;
 
@@ -73,9 +79,9 @@ module csr #(
     //Only have physical register for 0x105 and 0x106
     localparam STS_REG = 2;
 
-    localparam BM_SSTATUS = 32'h810A6162; //shadow
+    localparam BM_SSTATUS = 32'h810C6162; //shadow
     localparam BM_SIE = 32'h00000222; //shadow
-    localparam BM_STVEC = 32'hFFFFFFFF; //almost full write, just account for mode in 2 LSBs
+    localparam BM_STVEC = 32'hFFFFFFFD; //almost full write, just account for mode in 2 LSBs
     localparam BM_SCOUNTEREN = 32'h00000007;
 
     //Supervisor Trap Handling REGisters implemented - first 5
@@ -84,14 +90,21 @@ module csr #(
     localparam STH_REG = 4; //ovf not supported as of now
 
     localparam BM_SSCRATCH = 32'hFFFFFFFF; //full write to register, read by OS
-    localparam BM_SEPC = 32'hFFFFFFFF;
-    localparam BM_SCAUSE = 32'h0000BFFF;
+    localparam BM_SEPC = 32'hFFFFFFFE;
+    localparam BM_SCAUSE = 32'h8000BFFF;
     localparam BM_STVAL = 32'hFFFFFFFF;
     localparam BM_SIP = 32'h00000222; //shadow
 
     //Supervisor (Address) Protection and Translation - satp
     //0x180
     //dont need localparam for 1 register
+
+    //however masking is different story
+    localparam BM_SATP = 32'h803FFFFF; 
+
+    //same thinking for Machine Counter Inhibited
+    //0x320
+    localparam BM_MCOUNTINHIBIT = 32'h00000005;
 
     //Supervisor Timer Compare REGisters to implement - all 2 TODO
     // localparam STC_REG = 2;
@@ -105,11 +118,13 @@ module csr #(
         STS,
         STH,
         SATP,
-        MTS,       
+        MTS,
+        MCI,
         MTH,
         PMP_CFG,
         PMP_ADDR,
         MCT,
+        TIME,
         ILLEGAL_ACCESS
     } csr_t;
 
@@ -130,45 +145,21 @@ module csr #(
     logic [STS_REG - 1:0][31:0] sts;
     logic [STH_REG - 1:0][31:0] sth;
     logic [31:0] satp;
+    logic [31:0] mcountinhibit;
+
+    logic [31:0] tvec;
+    logic cntDenied;
+    logic satpTrapped;
 
     //Performs RW, RS, and RC operations of csr register
     function automatic [31:0] csrValue(input [31:0] csr);
         case (op)
-            2'b01: csrValue = dataIn;
-            2'b10: csrValue = (dataIn != 0) ? (csr | dataIn) : csr;
-            2'b11: csrValue = (dataIn != 0) ? (csr & ~dataIn) : csr;
+            2'b01: csrValue = dataIn; //rw
+            2'b10: csrValue = csr | dataIn; //rs
+            2'b11: csrValue = csr & ~dataIn; //rc
             default: csrValue = csr;
         endcase
     endfunction
-
-    //the following is a fix attempt for the trap vector because we did not take into account the different trap pc mode
-    //which is direct and vectored
-
-    //additionally mie and mip not implemented? i call cap but lets do mstatus.MIE, mie, mip and sstatus.SIE, sie
-    // and sip
-
-
-    // function automatic logic [31:0] trapVector(
-    //     input logic [31:0] tvec,
-    //     input logic [31:0] cause
-    // );
-    //     logic isInterrupt;
-    //     logic [31:0] base;
-
-    //     isInterrupt = cause[31];
-    //     base = {tvec[31:2], 2'b00};
-
-    //     if (tvec[1:0] == 2'b01 && isInterrupt)
-    //         trapVector = base + (cause[30:0] << 2);
-    //     else
-    //         trapVector = base;
-    // endfunction
-
-    // trapTargetPC = delegateTrap
-    //     ? trapVector(sts[2], trapCause)
-    //     : trapVector(mts[5], trapCause);
-
-    //fix mct incrementation bug
 
     //CSR address decoding
     always_comb
@@ -179,13 +170,13 @@ module csr #(
                     index = 0;
                     bitmask = BM_SSTATUS;
                 end
-            if (address == 12'h104)
+            else if (address == 12'h104)
                 begin
                     csr_type = MTS;
                     index = 4;
                     bitmask = BM_SIE;
                 end
-            if (address == 12'h105)
+            else if (address == 12'h105)
                 begin
                     csr_type = STS;
                     index = 0;
@@ -225,11 +216,13 @@ module csr #(
                 begin
                     csr_type = MTH;
                     index = 4;
-                    bitmask = BM_SIP;
+                    bitmask = 32'h00000002;
                 end
             else if (address == 12'h180)
                 begin
                     csr_type = SATP;
+                    bitmask = 0;
+                    index = 0;
                 end
             else if (address == 12'h300)
                 begin
@@ -285,6 +278,12 @@ module csr #(
                     index = 8;
                     bitmask = BM_MEDELEGH;
                 end
+            else if (address == 12'h320)
+                begin
+                    csr_type = MCI;
+                    index = 0;
+                    bitmask = BM_MCOUNTINHIBIT;
+                end
             else if (address == 12'h340)
                 begin
                     csr_type = MTH;
@@ -319,50 +318,32 @@ module csr #(
                 begin
                     csr_type = PMP_CFG;
                     index = address[3:0];
+                    bitmask = 0;
                 end
             else if (address >= 12'h3B0 && address <= 12'h3EF)
                 begin
                     csr_type = PMP_ADDR;
                     index = {address[5] ^ address[4], ~address[4], address[3:0]};
+                    bitmask = 0;
                 end
-            // else if (address == 12'hC00)
-            //     begin
-            //         csr_type = MCT;  
-            //     end
-            // else if (address == 12'hC01)
-            //     begin
-            //         csr_type = UCT;
-            //     end
-            // else if (address == 12'hC02)
-            //     begin
-            //         csr_type = UCT;
-            //     end
-            // else if (address >= 12'hC80 && address <= 12'hC82)
-            //     begin
-            //         csr_type = UCT;
-
-            //         if (!address[7])
-            //             begin
-            //                 index = address[1:0];
-            //             end
-            //         else
-            //             begin
-            //                 index = address[1:0] + 3;
-                //         end
-                // end
-            //  else if ((address >= 12'hB00 && address <= 12'hB02) ||
-            //         (address >= 12'hB80 && address <= 12'hB82))
-            //     begin
-            //         if (address[4:0] == 4'h1)
-            //             begin
-            //                 csr_type = ILLEGAL_ACCESS;
-            //             end
-            //         else
-            //             begin
-            //                 csr_type = MCT;
-            //                 index = {address[7], address[1]};
-            //             end
-            //     end
+            else if ((address & 12'hF7D) == 12'hB00) //chooses 4 shadow mct regs
+                begin
+                    csr_type = MCT;
+                    index = {address[7], address[1]};
+                    bitmask = 32'hFFFFFFFF;
+                end
+            else if ((address & 12'hF7D) == 12'hC00) //chooses 4 shadow uct regs
+                begin
+                    csr_type = MCT;
+                    index = {address[7], address[1]};
+                    bitmask = 0;
+                end
+            else if (address == 12'hC01 || address == 12'hC81)
+                begin
+                    csr_type = TIME;
+                    index = 0;
+                    bitmask = 0;
+                end
             else
                 begin
                     csr_type = ILLEGAL_ACCESS;
@@ -385,12 +366,13 @@ module csr #(
                         STS: dataOut = sts[index] & bitmask;
                         STH: dataOut = sth[index] & bitmask;
                         SATP: dataOut = satp;
-                        MTS: dataOut = mts[index] & bitmask;
-                        MTH: dataOut = mth[index] & bitmask;
+                        MCI: dataOut = mcountinhibit & bitmask;
+                        MTS: dataOut = (address == 12'h301) ? mts[index] : (mts[index] & bitmask);
+                        MTH: dataOut = (address == 12'h144) ? (mth[index] & BM_SIP) : (mth[index] & bitmask);
                         PMP_CFG: dataOut = pmpCfg[index];
                         PMP_ADDR: dataOut = pmpAddr[index];
                         MCT: dataOut = mct[index];
-                        // UCT: dataOut = mct[index];
+                        TIME: dataOut = address[7] ? mtime[63:32] : mtime[31:0];
                     endcase
 
                     if (csr_type == MTS && index == 0)
@@ -407,7 +389,8 @@ module csr #(
                 begin
                     mts <= '0; 
                     mts[1] <= 32'h4014112D;
-                    mts[8] <= 32'h00000007;
+                    // mts[8] <= 32'h00000000;
+                    mcountinhibit <= '0;
                     mth <= '0;
                     mct <= '0;
 
@@ -425,44 +408,17 @@ module csr #(
                 end 
             else
                 begin
-                    // if (mct[0] != 32'hFFFF_FFFF)
-                    //     begin
-                    //         mct[0] <= mct[0] + 1;
-                    //     end
-                    // else
-                    //     begin
-                    //         mct[3] <= mct[3] + 1;
-                    //     end
+                    //Increment mcycle unless inhibited
+                    if (!mcountinhibit[0])
+                        begin
+                            {mct[2], mct[0]} <= {mct[2], mct[0]} + 64'd1;
+                        end
 
-                    // if (counter == CLOCK_FREQ - 1) 
-                    //     begin
-                    //         counter <= 0;
-                    //         //Counts seconds elapsed after CPU reset
-                    //         if (mct[1] != 32'hFFFF_FFFF)
-                    //             begin
-                    //                 mct[1] <= mct[1] + 1;
-                    //             end
-                    //         else
-                    //             begin
-                    //                 mct[4] <= mct[4] + 1;
-                    //             end
-                    //     end
-                    // else 
-                    //     begin
-                    //         counter <= counter + 1;
-                    //     end
-
-                    // if (retired) 
-                    //     begin
-                    //         if (mct[2] != 32'hFFFF_FFFF)
-                    //             begin
-                    //                 mct[2] <= mct[2] + 1;
-                    //             end
-                    //         else
-                    //             begin
-                    //                 mct[5] <= mct[5] + 1;
-                    //             end
-                    //     end
+                    //Increment minstret for retired instructions unless inhibited
+                    if (retired && !mcountinhibit[2])
+                        begin
+                            {mct[3], mct[1]} <= {mct[3], mct[1]} + 64'd1;
+                        end
 
                     if (trapTaken)
                         begin
@@ -499,7 +455,7 @@ module csr #(
                         end
                     else if (isMRET)
                         begin
-                            mode <= mts[0][12:11];
+                            mode <= mode_t'(mts[0][12:11]);;
 
                             //Restore interrupt enable
                             mts[0][3] <= mts[0][7];
@@ -509,6 +465,13 @@ module csr #(
 
                             //Clear MPP after returning
                             mts[0][12:11] <= 2'b00;
+
+                            //clear out MPRV when cpu not in machine mode
+                            if (mts[0][12:11] != 2'b11)
+                                begin
+                                    mts[0][17] <= 1'b0;
+                                end
+                    
                         end
                     else if (isSRET)
                         begin
@@ -522,16 +485,20 @@ module csr #(
 
                             //Clear SPP after return
                             mts[0][8] <= 1'b0;
+
+                            //Clear MPRV for modes under Machine
+                            mts[0][17] <= 1'b0;
                         end
-                    else if ((op != 2'b00) && (csr_type != ILLEGAL_ACCESS))
+                    else if ((op != 2'b00) && (csr_type != ILLEGAL_ACCESS) && !csrIllegalAccess)
                         begin
                             //Write port of CSRs
                             case (csr_type)
                                 MCT: mct[index] <= (mct[index] & ~bitmask) | (csrValue(mct[index]) & bitmask);
                                 STS: sts[index] <= (sts[index] & ~bitmask) | (csrValue(sts[index]) & bitmask);
                                 STH: sth[index] <= (sth[index] & ~bitmask) | (csrValue(sth[index]) & bitmask);
-                                SATP: satp <= csrValue(satp);
+                                SATP: satp <= csrValue(satp) & BM_SATP;
                                 MTS: mts[index] <= (mts[index] & ~bitmask) | (csrValue(mts[index]) & bitmask);
+                                MCI: mcountinhibit <= (mcountinhibit & ~bitmask) | (csrValue(mcountinhibit) & bitmask);
                                 MTH: mth[index] <= (mth[index] & ~bitmask) | (csrValue(mth[index]) & bitmask);
                                 PMP_CFG: pmpCfg[index] <= csrValue(pmpCfg[index]);
                                 PMP_ADDR: pmpAddr[index] <= csrValue(pmpAddr[index]);
@@ -540,12 +507,32 @@ module csr #(
                 end
         end
 
+    assign satpTrapped = (csr_type == SATP) && (mode == SUPERVISOR) && mts[0][20];
+
+    assign cntDenied = (address[11:8] == 4'hC) && (((mode != MACHINE) && !mts[6][address[1:0]]) || ((mode == USER) && !sts[1][address[1:0]]));
+
     assign delegateTrap = (mode != MACHINE) && (trapCause[31] ? mts[3][trapCause[4:0]] : mts[2][trapCause[4:0]]);
 
-    assign trapTargetPC = delegateTrap ? sts[0] : mts[5]; // stvec : mtvec
+    assign tvec = delegateTrap ? sts[0] : mts[5];
+
+    //DOES NOT TAKE INTO ACCOUNT VECTORED MODE FOR PC VALUES
+    // assign trapTargetPC = delegateTrap ? sts[0] : mts[5]; // stvec : mtvec
+
+    assign trapTargetPC = (tvec[0] && trapCause[31]) ?
+                                ({tvec[31:2], 2'b00} + {trapCause[29:0], 2'b00})
+                                                     : {tvec[31:2], 2'b00};
+
     assign mretTargetPC = mth[1]; //mepc
     assign sretTargetPC = sth[1]; //sepc
 
-    assign csrIllegalAccess = ((readEnable || (op != 2'b00)) || (writeEnable || (op != 2'b11)))&& (mode < address[9:8]) ;
+    assign csrIllegalAccess = (readEnable || (op != 2'b00)) && ((mode < address[9:8]) || (csr_type == ILLEGAL_ACCESS) || ((op != 2'b00) && (address[11:10] == 2'b11)) || cntDenied || satpTrapped);
+
+    assign mstatusOut = mts[0] & BM_MSTATUS;
+    assign mieOut = mts[4];
+    assign mipOut = mth[4];
+    assign midelegOut = mts[3];
+    assign satpOut = satp;
+
+    // mhartid (0xF14) doesn’t exist. OpenSBI reads it unconditionally at boot. Add mhartid=0, plus mvendorid, marchid, mimpid (0xF11–0xF13) and mconfigptr (0xF15) as read-only zeros.
 
 endmodule
