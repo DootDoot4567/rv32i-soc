@@ -6,8 +6,7 @@
 module multiplier #(
     parameter WIDTH = 32,
     localparam HALF_WIDTH = 16,
-    localparam DOUBLE_WIDTH = 64,
-    localparam NUM_ROWS = 17
+    localparam DOUBLE_WIDTH = 64
 ) (
     input logic clock,
     input logic reset,
@@ -23,8 +22,6 @@ module multiplier #(
 
     output logic [DOUBLE_WIDTH - 1:0] result
 );
-    localparam int PW = DOUBLE_WIDTH + 1;
-
     //Do regular booth encoding
     //Apply encoding on pairs of bit produced by prev step
 
@@ -34,7 +31,6 @@ module multiplier #(
     //Then compress partial product rows using a wallace tree
 
     logic [WIDTH:0] multiplier;
-    logic [DOUBLE_WIDTH:0] product;
 
     //Booth rows
     logic [WIDTH:0] boothRecodingOutput1;
@@ -44,7 +40,13 @@ module multiplier #(
 
     //Wallace Tree Injection
     logic [2:0] cycle_count;
+    logic [DOUBLE_WIDTH:0] acc_sum;
+    logic [DOUBLE_WIDTH:0] acc_carry;
 
+    logic [DOUBLE_WIDTH:0] reduce4_sum;
+    logic [DOUBLE_WIDTH:0] reduce4_carry;
+    logic [DOUBLE_WIDTH:0] reduce6_sum;
+    logic [DOUBLE_WIDTH:0] reduce6_carry;
 
     typedef struct packed {
         logic [WIDTH:0] partialProduct;
@@ -74,87 +76,81 @@ module multiplier #(
         return result;
     endfunction
 
+    //Bookkeeping for internal multiplier state
     always_ff @(posedge clock)
         begin
             if (reset)
                 begin
                     busy <= 1'b0;
+                    done <= 1'b0;
                     multiplier <= '0;
                     cycle_count <= '0;
+                    acc_sum   <= '0;
+                    acc_carry <= '0;
                 end
             else if (start)
                 begin
                     busy <= 1'b1;
                     multiplier <= {multIn2, 1'b0};
                     cycle_count <= '0;
+                    acc_sum   <= '0;
+                    acc_carry <= '0;
                 end
             else if (busy)
                 begin
                     cycle_count <= cycle_count + 1;
-                end
-            else if (busy && cycle_count == 3)
-                begin
-                    busy <= 1'b0;
-                    done <= 1'b1;
-                    result <= product;
+
+                    if (cycle_count == 4)
+                        begin
+                            busy <= 1'b0;
+                            done <= 1'b1;
+                            result <= (acc_sum + acc_carry);
+                        end
                 end
         end
 
-    // ---- Generate this cycle's rows (up to 4), shifted + sign-extended + neg-corrected ----
-    logic [PW-1:0] shifted_row [4];
-    logic          row_valid   [4];
-    int group_idx;
+    //Generate this cycle's rows (up to 4), shifted + correct neg bit
+    logic [DOUBLE_WIDTH:0] shifted_row [4];
+    int groupIndex;
     booth_row_t row;
-    logic [PW-1:0] ext_row;
+    logic [DOUBLE_WIDTH:0] ext_row;
 
-    always_comb begin
-        for (int g = 0; g < 4; g++) begin
-            group_idx = cycle_count * 4 + g;
-            row_valid[g] = (group_idx < NUM_ROWS);
-
-            if (row_valid[g]) begin
-                row = computePartialProduct(multIn1, multiplier[2*group_idx +: 3]);
-                ext_row = {{(PW-(WIDTH+1)){row.partialProduct[WIDTH]}}, row.partialProduct};
-                shifted_row[g] = (ext_row << (2*group_idx)) | (row.neg ? (PW'(1) << (2*group_idx)) : '0);
-            end else begin
-                shifted_row[g] = '0;
-            end
+    always_comb 
+        begin
+            for (int g = 0; g < 4; g++) 
+                begin
+                    groupIndex = cycle_count * 4 + g;
+                    row = computePartialProduct(multIn1, multiplier[2*groupIndex +: 3]);
+                    ext_row = {{(DOUBLE_WIDTH + 1-(WIDTH+1)){row.partialProduct[WIDTH]}}, row.partialProduct};
+                    shifted_row[g] = (ext_row << (2*groupIndex)) | (row.neg ? (DOUBLE_WIDTH + 1'(1) << (2*groupIndex)) : '0);
+                end
         end
-    end
 
-    // ---- Accumulator (carry-save) ----
-    logic [PW-1:0] acc_sum, acc_carry;
-
-    logic [PW-1:0] reduce4_sum, reduce4_carry;
-    logic [PW-1:0] reduce6_sum, reduce6_carry;
-
-    wallace_reduce_four_two #(.W(PW)) red4 (
+    wallace_reduce_four_two #(.W(DOUBLE_WIDTH + 1)) red4 (
         .row0(shifted_row[0]), .row1(shifted_row[1]),
         .row2(shifted_row[2]), .row3(shifted_row[3]),
         .sum_out(reduce4_sum), .carry_out(reduce4_carry)
     );
 
-    wallace_reduce_six_two #(.W(PW)) red6 (
+    wallace_reduce_six_two #(.W(DOUBLE_WIDTH + 1)) red6 (
         .row0(acc_sum), .row1(acc_carry),
         .row2(shifted_row[0]), .row3(shifted_row[1]),
         .row4(shifted_row[2]), .row5(shifted_row[3]),
         .sum_out(reduce6_sum), .carry_out(reduce6_carry)
     );
 
-    always_ff @(posedge clock) begin
-        if (reset || start) begin
-            acc_sum   <= '0;
-            acc_carry <= '0;
-        end else if (busy) begin
-            if (cycle_count == 3'd0) begin
-                acc_sum   <= reduce4_sum;
-                acc_carry <= reduce4_carry;
-            end else begin
-                acc_sum   <= reduce6_sum;
-                acc_carry <= reduce6_carry;
+    always_ff @(posedge clock) 
+        begin
+            if (busy) begin
+                if (cycle_count == 3'd0) begin
+                    acc_sum   <= reduce4_sum;
+                    acc_carry <= reduce4_carry;
+                end else begin
+                    acc_sum   <= reduce6_sum;
+                    acc_carry <= reduce6_carry;
+                end
             end
         end
-    end
 
     // ---- Final add ----
     always_ff @(posedge clock) begin
