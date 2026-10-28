@@ -4,15 +4,16 @@
 //Modified (Radix-4) Booth Recoding + Wallace Tree Multiplier
 
 module multiplier #(
-    parameter WIDTH = 32,
+    localparam WIDTH = 32,
     localparam HALF_WIDTH = 16,
-    localparam DOUBLE_WIDTH = 64
+    localparam DOUBLE_WIDTH = 64,
+    localparam NUM_BOOTH_PP = 4
 ) (
-    input logic clock,
+   input logic clock,
     input logic reset,
 
     input logic start,
-    input logic signed_mode,
+    // input logic signed_mode,
 
     input logic [WIDTH - 1:0] multIn1,
     input logic [WIDTH - 1:0] multIn2,
@@ -32,26 +33,28 @@ module multiplier #(
 
     logic [WIDTH:0] multiplier;
 
+    typedef struct packed {
+        logic [WIDTH:0] partialProduct;
+        logic neg;
+    } booth_row_t;
+
     //Booth rows
-    logic [WIDTH:0] boothRecodingOutput1;
-    logic [WIDTH:0] boothRecodingOutput2;
-    logic [WIDTH:0] boothRecodingOutput3;
-    logic [WIDTH:0] boothRecodingOutput4;
+    booth_row_t boothRecodingOutput1;
+    booth_row_t boothRecodingOutput2;
+    booth_row_t boothRecodingOutput3;
+    booth_row_t boothRecodingOutput4;
 
     //Wallace Tree Injection
-    logic [2:0] cycle_count;
+    logic [1:0] cycle_count;
     logic [DOUBLE_WIDTH:0] acc_sum;
     logic [DOUBLE_WIDTH:0] acc_carry;
 
+    logic [NUM_BOOTH_PP - 1:0][DOUBLE_WIDTH:0] shifted_row;
     logic [DOUBLE_WIDTH:0] reduce4_sum;
     logic [DOUBLE_WIDTH:0] reduce4_carry;
     logic [DOUBLE_WIDTH:0] reduce6_sum;
     logic [DOUBLE_WIDTH:0] reduce6_carry;
 
-    typedef struct packed {
-        logic [WIDTH:0] partialProduct;
-        logic neg;
-    } booth_row_t;
 
     function automatic booth_row_t computePartialProduct(
         logic [WIDTH - 1:0] multiplicand,
@@ -59,36 +62,31 @@ module multiplier #(
     );
         booth_row_t result;
         logic [WIDTH:0] sum;
-        logic [WIDTH:0] doubleMultiplicand = {multiplicand, 1'b0};
+        logic [WIDTH:0] doubleMultiplicand;
+
+        doubleMultiplicand = {multiplicand, 1'b0};
 
         //Partial Product Selection Table
         case(window)
             3'b000, 3'b111: sum = 0;
             3'b001, 3'b010: sum = {multiplicand[WIDTH-1], multiplicand};
             3'b011: sum = doubleMultiplicand;
-            3'b100: sum = ~doubleMultiplicand;
-            3'b101, 3'b110: sum = ~{multiplicand[WIDTH-1], multiplicand};
+            3'b100: sum = ~doubleMultiplicand + 1;
+            3'b101, 3'b110: sum = ~{multiplicand[WIDTH-1], multiplicand} + 1;
         endcase
 
         result.partialProduct = sum;
         result.neg = (window >= 3'b100 && window < 3'b111);
 
-        return result;
+        computePartialProduct = result;
     endfunction
 
     //Bookkeeping for internal multiplier state
     always_ff @(posedge clock)
         begin
-            if (reset)
-                begin
-                    busy <= 1'b0;
-                    done <= 1'b0;
-                    multiplier <= '0;
-                    cycle_count <= '0;
-                    acc_sum   <= '0;
-                    acc_carry <= '0;
-                end
-            else if (start)
+            done <= busy && (cycle_count == 3);
+            
+            if (start)
                 begin
                     busy <= 1'b1;
                     multiplier <= {multIn2, 1'b0};
@@ -100,49 +98,179 @@ module multiplier #(
                 begin
                     cycle_count <= cycle_count + 1;
 
-                    if (cycle_count == 4)
+                    if (cycle_count == 3)
                         begin
                             busy <= 1'b0;
-                            done <= 1'b1;
                             result <= (acc_sum + acc_carry);
                         end
+                end
+            else
+                begin
+                    busy <= 1'b0;
+                    multiplier <= '0;
+                    cycle_count <= '0;
+                    acc_sum   <= '0;
+                    acc_carry <= '0;
                 end
         end
 
     //Generate this cycle's rows (up to 4), shifted + correct neg bit
-    logic [DOUBLE_WIDTH:0] shifted_row [4];
-    int groupIndex;
-    booth_row_t row;
-    logic [DOUBLE_WIDTH:0] ext_row;
-
     always_comb 
         begin
-            for (int g = 0; g < 4; g++) 
-                begin
-                    groupIndex = cycle_count * 4 + g;
-                    row = computePartialProduct(multIn1, multiplier[2*groupIndex +: 3]);
-                    ext_row = {{(DOUBLE_WIDTH + 1-(WIDTH+1)){row.partialProduct[WIDTH]}}, row.partialProduct};
-                    shifted_row[g] = (ext_row << (2*groupIndex)) | (row.neg ? (DOUBLE_WIDTH + 1'(1) << (2*groupIndex)) : '0);
-                end
+            case (cycle_count)
+                2'b00:
+                    begin
+                        boothRecodingOutput1 = computePartialProduct(multIn1, multiplier[2:0]);
+                        boothRecodingOutput2 = computePartialProduct(multIn1, multiplier[4:2]);
+                        boothRecodingOutput3 = computePartialProduct(multIn1, multiplier[6:4]);
+                        boothRecodingOutput4 = computePartialProduct(multIn1, multiplier[8:6]);
+
+                        shifted_row[0] = {
+                            {32{boothRecodingOutput1.partialProduct[WIDTH]}},
+                            boothRecodingOutput1.partialProduct
+                        };
+                        shifted_row[1] = {
+                            {30{boothRecodingOutput2.partialProduct[WIDTH]}},
+                            boothRecodingOutput2.partialProduct,
+                            2'b0
+                        };
+                        shifted_row[2] = {
+                            {28{boothRecodingOutput3.partialProduct[WIDTH]}},
+                            boothRecodingOutput3.partialProduct,
+                            4'b0
+                        };
+                        shifted_row[3] = {
+                            {26{boothRecodingOutput4.partialProduct[WIDTH]}},
+                            boothRecodingOutput4.partialProduct,
+                            6'b0
+                        };
+                    end
+
+                2'b01:
+                    begin
+                        boothRecodingOutput1 = computePartialProduct(multIn1, multiplier[10:8]);
+                        boothRecodingOutput2 = computePartialProduct(multIn1, multiplier[12:10]);
+                        boothRecodingOutput3 = computePartialProduct(multIn1, multiplier[14:12]);
+                        boothRecodingOutput4 = computePartialProduct(multIn1, multiplier[16:14]);
+
+                        shifted_row[0] = {
+                            {24{boothRecodingOutput1.partialProduct[WIDTH]}},
+                            boothRecodingOutput1.partialProduct,
+                            8'b0
+                        };
+                        shifted_row[1] = {
+                            {22{boothRecodingOutput2.partialProduct[WIDTH]}},
+                            boothRecodingOutput2.partialProduct,
+                            10'b0
+                        };
+                        shifted_row[2] = {
+                            {20{boothRecodingOutput3.partialProduct[WIDTH]}},
+                            boothRecodingOutput3.partialProduct,
+                            12'b0
+                        };
+                        shifted_row[3] = {
+                            {18{boothRecodingOutput4.partialProduct[WIDTH]}},
+                            boothRecodingOutput4.partialProduct,
+                            14'b0
+                        };
+                    end
+
+                2'b10:
+                    begin
+                        boothRecodingOutput1 = computePartialProduct(multIn1, multiplier[18:16]);
+                        boothRecodingOutput2 = computePartialProduct(multIn1, multiplier[20:18]);
+                        boothRecodingOutput3 = computePartialProduct(multIn1, multiplier[22:20]);
+                        boothRecodingOutput4 = computePartialProduct(multIn1, multiplier[24:22]);
+
+                        shifted_row[0] = {
+                            {16{boothRecodingOutput1.partialProduct[WIDTH]}},
+                            boothRecodingOutput1.partialProduct,
+                            16'b0
+                        };
+                        shifted_row[1] = {
+                            {14{boothRecodingOutput2.partialProduct[WIDTH]}},
+                            boothRecodingOutput2.partialProduct,
+                            18'b0
+                        };
+                        shifted_row[2] = {
+                            {12{boothRecodingOutput3.partialProduct[WIDTH]}},
+                            boothRecodingOutput3.partialProduct,
+                            20'b0
+                        };
+                        shifted_row[3] = {
+                            {10{boothRecodingOutput4.partialProduct[WIDTH]}},
+                            boothRecodingOutput4.partialProduct,
+                            22'b0};
+                    end
+
+                2'b11:
+                    begin
+                        boothRecodingOutput1 = computePartialProduct(multIn1, multiplier[26:24]);
+                        boothRecodingOutput2 = computePartialProduct(multIn1, multiplier[28:26]);
+                        boothRecodingOutput3 = computePartialProduct(multIn1, multiplier[30:28]);
+                        boothRecodingOutput4 = computePartialProduct(multIn1, multiplier[32:30]);
+
+                        shifted_row[0] = {
+                            {8{boothRecodingOutput1.partialProduct[WIDTH]}},
+                            boothRecodingOutput1.partialProduct,
+                            24'b0
+                        };
+                        shifted_row[1] = {
+                            {6{boothRecodingOutput2.partialProduct[WIDTH]}},
+                            boothRecodingOutput2.partialProduct,
+                            26'b0
+                        };
+                        shifted_row[2] = {
+                            {4{boothRecodingOutput3.partialProduct[WIDTH]}},
+                            boothRecodingOutput3.partialProduct,
+                            28'b0
+                        };
+                        shifted_row[3] = {
+                            {2{boothRecodingOutput4.partialProduct[WIDTH]}},
+                            boothRecodingOutput4.partialProduct,
+                            30'b0
+                        };
+                    end
+
+                default:
+                    begin
+                        boothRecodingOutput1 = '0;
+                        boothRecodingOutput2 = '0;
+                        boothRecodingOutput3 = '0;
+                        boothRecodingOutput4 = '0;
+
+                        shifted_row[0] = '0;
+                        shifted_row[1] = '0;
+                        shifted_row[2] = '0;
+                        shifted_row[3] = '0;
+                    end
+            endcase
         end
 
     wallace_reduce_four_two #(.W(DOUBLE_WIDTH + 1)) red4 (
-        .row0(shifted_row[0]), .row1(shifted_row[1]),
-        .row2(shifted_row[2]), .row3(shifted_row[3]),
-        .sum_out(reduce4_sum), .carry_out(reduce4_carry)
+        .row0(shifted_row[0]),
+        .row1(shifted_row[1]),
+        .row2(shifted_row[2]),
+        .row3(shifted_row[3]),
+        .sum_out(reduce4_sum),
+        .carry_out(reduce4_carry)
     );
 
     wallace_reduce_six_two #(.W(DOUBLE_WIDTH + 1)) red6 (
-        .row0(acc_sum), .row1(acc_carry),
-        .row2(shifted_row[0]), .row3(shifted_row[1]),
-        .row4(shifted_row[2]), .row5(shifted_row[3]),
-        .sum_out(reduce6_sum), .carry_out(reduce6_carry)
+        .row0(acc_sum),
+        .row1(acc_carry),
+        .row2(shifted_row[0]),
+        .row3(shifted_row[1]),
+        .row4(shifted_row[2]),
+        .row5(shifted_row[3]),
+        .sum_out(reduce6_sum),
+        .carry_out(reduce6_carry)
     );
 
     always_ff @(posedge clock) 
         begin
             if (busy) begin
-                if (cycle_count == 3'd0) begin
+                if (cycle_count == 3) begin
                     acc_sum   <= reduce4_sum;
                     acc_carry <= reduce4_carry;
                 end else begin
@@ -151,15 +279,5 @@ module multiplier #(
                 end
             end
         end
-
-    // ---- Final add ----
-    always_ff @(posedge clock) begin
-        if (busy && cycle_count == 3'd4) begin
-            result <= (acc_sum + acc_carry);
-            done   <= 1'b1;
-        end else begin
-            done <= 1'b0;
-        end
-    end
 
 endmodule
